@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>SpeedApp preview</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --accent: #6bc7ff;
+      --time: #ff5757;
+      --camera: #ffc747;
+      --route: #52b3ff;
+      --primary: #fff;
+      --secondary: rgba(255,255,255,.72);
+      --tertiary: rgba(255,255,255,.48);
+      --track: rgba(0,0,0,.28);
+      --stroke: rgba(255,255,255,.1);
+      --glass: rgba(20,20,22,.62);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Segoe UI", sans-serif;
+      background: #0b0d10;
+      color: var(--primary);
+    }
+    .stage {
+      min-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .phone {
+      width: 390px;
+      height: 844px;
+      max-height: calc(100vh - 48px);
+      border-radius: 44px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255,255,255,.12);
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      --hud: 36%;
+    }
+    .map-pane {
+      position: relative;
+      flex: 1 1 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #map { position: absolute; inset: 0; }
+    .scrim {
+      position: absolute; inset: 0; pointer-events: none; z-index: 400;
+      background: linear-gradient(180deg, rgba(0,0,0,.22) 0%, transparent 40%, transparent 70%, rgba(0,0,0,.28) 100%);
+    }
+    .ui {
+      position: absolute; inset: 0; z-index: 500;
+      display: flex; flex-direction: column;
+      padding: 54px 14px 10px;
+      pointer-events: none;
+    }
+    .hud-pane {
+      flex: 0 0 var(--hud);
+      height: var(--hud);
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border-radius: 20px 20px 0 0;
+      border-top: 1px solid var(--stroke);
+      z-index: 550;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .split {
+      flex: 0 0 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ns-resize;
+      touch-action: none;
+      z-index: 600;
+    }
+    .split-line {
+      width: 42px;
+      height: 5px;
+      border-radius: 99px;
+      background: var(--tertiary);
+    }
+    .ui > * { pointer-events: auto; }
+    .top { display: flex; gap: 8px; align-items: flex-start; }
+    .bar, .icon-btn {
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border: 1px solid var(--stroke);
+    }
+    .bar {
+      flex: 1;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px;
+      min-height: 52px;
+      border-radius: 18px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+    }
+    .bar h1 { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.25; }
+    .bar.nav h1 { font-size: 18px; }
+    .bar p { margin: 3px 0 0; font-size: 13px; color: var(--tertiary); }
+    .bar.nav p { color: var(--accent); }
+    .bar .grow { flex: 1; min-width: 0; }
+    .icon { color: var(--accent); font-size: 18px; width: 28px; text-align: center; }
+    .x {
+      width: 44px; height: 44px; border: 0; border-radius: 50%;
+      background: var(--track); color: var(--secondary); font-size: 14px; cursor: pointer;
+    }
+    .icon-btn {
+      width: 52px; height: 52px; border-radius: 50%; color: var(--primary);
+      cursor: pointer; font-size: 18px; flex: 0 0 52px;
+    }
+    .recenter {
+      align-self: flex-end;
+      margin-bottom: 8px;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      font-size: 16px;
+      color: var(--accent);
+    }
+    .choice {
+      display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+      border: 0; background: #2c2c2e; color: #fff; border-radius: 14px; padding: 14px 16px;
+      margin: 8px 0 0; cursor: pointer;
+    }
+    .choice.on { outline: 2px solid var(--accent); }
+    .choice strong { display: block; font-size: 16px; }
+    .choice small { color: #8e8e93; }
+    .choice .check { margin-left: auto; color: var(--accent); font-size: 18px; }
+    .trip {
+      display: flex; gap: 6px; padding: 4px; margin: 0 0 12px;
+      background: #2c2c2e; border-radius: 12px;
+    }
+    .trip button {
+      flex: 1; border: 0; border-radius: 10px; padding: 10px 8px;
+      background: transparent; color: #8e8e93; font: 650 15px inherit; cursor: pointer;
+    }
+    .trip button.on { background: #3a3a3c; color: #fff; }
+    .spacer { flex: 1; pointer-events: none !important; }
+    [hidden] { display: none !important; }
+    .cluster {
+      border-radius: 0;
+      border: 0;
+      background: transparent;
+      padding: 4px 6px 10px;
+      height: 100%;
+      min-height: 0;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      flex: 1;
+    }
+    .gauge-wrap {
+      position: relative;
+      width: min(280px, 72%);
+      height: auto;
+      aspect-ratio: 1;
+      max-height: calc(100% - 36px);
+      margin: 8px auto 4px;
+    }
+    .speed-badge {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      text-align: right;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .gauge-wrap svg { width: 100%; height: 100%; display: block; }
+    .arrival {
+      position: absolute;
+      left: 0; right: 0; bottom: 12px;
+      text-align: center;
+      pointer-events: none;
+    }
+    .value {
+      font-size: 48px; font-weight: 750; letter-spacing: -2px; line-height: .9;
+      font-variant-numeric: tabular-nums;
+    }
+    .unit { margin-top: 0; font-size: 14px; font-weight: 650; color: var(--accent); }
+    .eta {
+      font-size: 16px; font-weight: 750;
+      font-variant-numeric: tabular-nums; color: var(--tertiary);
+    }
+    .eta.on { color: var(--time); }
+    .footer { margin-top: 2px; font-size: 11px; color: var(--secondary); }
+    .tick { font-size: 10px; font-weight: 650; fill: var(--tertiary); }
+    .pace-delta { font-size: 9px; font-weight: 750; }
+    .cam-badge {
+      position: absolute;
+      left: 14px;
+      bottom: 44px;
+      z-index: 3;
+      display: none;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      pointer-events: none;
+    }
+    .cam-badge.show { display: flex; }
+    .cam-badge .icon {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--camera); color: #111;
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
+    }
+    .cam-badge.hot .icon { background: #ff3b30; color: #fff; }
+    .cam-badge .dist { font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .cam-badge .lim { font-size: 11px; font-weight: 650; color: var(--secondary); }
+    .cam-pin {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--camera);
+      border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #111;
+    }
+    .demo {
+      position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 520;
+      border: 0; border-radius: 14px; padding: 12px; font: 650 15px inherit; cursor: pointer;
+      background: var(--accent); color: #041018;
+    }
+    .sheet {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 800;
+      background: #1c1c1e; border-radius: 18px 18px 0 0; max-height: 72%;
+      display: none; flex-direction: column;
+      padding: 10px 16px 24px;
+    }
+    .sheet.open { display: flex; }
+    .handle { width: 36px; height: 5px; background: #636366; border-radius: 99px; margin: 6px auto 12px; }
+    .sheet input {
+      width: 100%; border: 0; border-radius: 12px; padding: 12px 14px; font-size: 16px;
+      background: #2c2c2e; color: #fff; outline: none;
+    }
+    .results { overflow: auto; margin: 8px 0 0; }
+    .hit {
+      display: block; width: 100%; text-align: left; border: 0; background: transparent;
+      color: #fff; padding: 14px 4px; border-bottom: 1px solid #2c2c2e; cursor: pointer;
+    }
+    .hit small { display: block; color: #8e8e93; margin-top: 3px; }
+    .perm {
+      position: absolute; inset: 0; z-index: 900; background: rgba(0,0,0,.82);
+      display: none; align-items: center; justify-content: center; text-align: center; padding: 24px;
+    }
+    .perm.open { display: flex; }
+    .perm h2 { font-size: 26px; margin: 12px 0 8px; }
+    .perm p { color: rgba(255,255,255,.7); max-width: 320px; }
+    .perm button {
+      margin-top: 16px; border: 0; border-radius: 12px; padding: 12px 18px;
+      background: var(--accent); color: #041018; font: 650 16px inherit; cursor: pointer;
+    }
+    .user-dot {
+      width: 16px; height: 16px; background: var(--accent); border: 3px solid #fff; border-radius: 50%;
+      box-shadow: 0 0 0 10px rgba(107,199,255,.22);
+    }
+    .user-puck { position: relative; width: 16px; height: 16px; }
+    .user-chevron {
+      position: absolute; left: 4px; top: -11px; width: 0; height: 0;
+      border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-bottom: 8px solid #fff;
+    }
+    .map-controls { align-self: flex-end; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+    .heading-btn { margin-bottom: 0; }
+    .leaflet-control-attribution { display: none; }
+    .note {
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      z-index: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+      color: rgba(255,255,255,.4); pointer-events: none;
+    }
+    .hint {
+      margin: 0 0 16px; color: rgba(255,255,255,.45); font-size: 13px; text-align: center;
+    }
+    body.day {
+      --accent: #1a7af5;
+      --time: #db2929;
+      --camera: #e8a318;
+      --route: #1e75f5;
+      --primary: #12161c;
+      --secondary: rgba(18,22,28,.58);
+      --tertiary: rgba(18,22,28,.4);
+      --track: rgba(0,0,0,.08);
+      --stroke: rgba(0,0,0,.08);
+      --glass: rgba(255,255,255,.74);
+    }
+    body.day .scrim {
+      background: linear-gradient(180deg, rgba(255,255,255,.18) 0%, transparent 28%, transparent 58%, rgba(255,255,255,.5) 100%);
+    }
+    body.day .sheet { background: #f2f2f7; color: #12161c; }
+    body.day .choice, body.day .sheet input { background: #fff; color: #12161c; }
+    body.day .trip { background: #e5e5ea; }
+    body.day .trip button { color: #8e8e93; }
+    body.day .trip button.on { background: #fff; color: #12161c; }
+    body.day .hit { color: #12161c; border-color: #e5e5ea; }
+    body.day .perm { background: rgba(255,255,255,.9); color: #12161c; }
+    body.day .perm p { color: rgba(18,22,28,.55); }
+    body.day .note, body.day .hint { color: rgba(18,22,28,.4); }
+    body.day .handle { background: #c7c7cc; }
+    @media (max-width: 480px) {
+      .stage { padding: 0; }
+      .phone { width: 100%; height: 100vh; max-height: none; border-radius: 0; border: 0; }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div>
+      <p class="hint">Web preview of the iPhone HUD. Search a place, then tap Play preview drive.</p>
+      <div class="phone" id="phone">
+        <div class="map-pane" id="mapPane">
+          <div id="map"></div>
+          <div class="scrim"></div>
+          <div class="note">Web preview</div>
+          <div class="ui">
+            <div class="top">
+              <button class="bar" id="destBar" type="button">
+                <span class="icon" id="destIcon">⌕</span>
+                <span class="grow">
+                  <h1 id="destTitle">Where to?</h1>
+                  <p id="destSub">Address, place, or road</p>
+                </span>
+                <span class="x" id="clearBtn" hidden>×</span>
+              </button>
+              <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings">⚙</button>
+            </div>
+            <div class="spacer"></div>
+            <div class="map-controls">
+              <button class="icon-btn recenter heading-btn" id="headingBtn" type="button" aria-label="Driver view">⬆</button>
+              <button class="icon-btn recenter" id="recenterBtn" type="button" hidden aria-label="Current location">➤</button>
+            </div>
+            <button class="demo" id="demoBtn" type="button" hidden>Play preview drive</button>
+          </div>
+        </div>
+        <div class="hud-pane" id="hudPane">
+          <div class="split" id="split" role="separator" aria-orientation="horizontal" aria-label="Resize map and HUD">
+            <div class="split-line"></div>
+          </div>
+          <div class="cluster">
+            <div class="cam-badge" id="camWarn">
+              <div class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.2a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z"/>
+                </svg>
+              </div>
+              <div class="dist" id="camDetail">1000 m</div>
+              <div class="lim" id="camLimit"></div>
+            </div>
+            <div class="speed-badge">
+              <div class="value" id="value">0</div>
+              <div class="unit" id="unit">km/h</div>
+            </div>
+            <div class="gauge-wrap">
+              <svg id="gauge" viewBox="0 0 236 236" aria-hidden="true"></svg>
+              <div class="arrival">
+                <div class="eta" id="eta">—</div>
+                <div class="footer" id="footer"></div>
+              </div>
+            </div>
+            <input class="scrub" id="speedScrub" type="range" min="0" max="170" value="87" />
+          </div>
+        </div>
+
+        <div class="sheet" id="settings">
+          <div class="handle"></div>
+          <h2 style="margin:0 0 8px;font-size:20px;">Settings</h2>
+          <p style="margin:0;color:#8e8e93;font-size:13px;">Trip</p>
+          <button class="choice" id="modeDrive" type="button">
+            <span><strong>Drive</strong><small>Car view. Hold the map to look and zoom.</small></span>
+            <span class="check" id="checkDrive">✓</span>
+          </button>
+          <button class="choice" id="modeRide" type="button">
+            <span><strong>Ride</strong><small>Motorcycle view. Hold the map to look and zoom.</small></span>
+            <span class="check" id="checkRide">✓</span>
+          </button>
+          <p style="margin:16px 0 0;color:#8e8e93;font-size:13px;">Map</p>
+          <button class="choice" id="headingDriver" type="button">
+            <span><strong>Driver</strong><small>Map turns with the car</small></span>
+            <span class="check" id="checkHeadingDriver">✓</span>
+          </button>
+          <button class="choice" id="headingNorth" type="button">
+            <span><strong>North</strong><small>North stays at the top</small></span>
+            <span class="check" id="checkHeadingNorth">✓</span>
+          </button>
+          <p style="margin:16px 0 0;color:#8e8e93;font-size:13px;">Speed unit</p>
+          <button class="choice" id="unitKmh" type="button">
+            <span><strong>Kilometers</strong><small>km/h and km</small></span>
+            <span class="check" id="checkKmh">✓</span>
+          </button>
+          <button class="choice" id="unitMph" type="button">
+            <span><strong>Miles</strong><small>mph and miles</small></span>
+            <span class="check" id="checkMph">✓</span>
+          </button>
+          <p style="margin:16px 0 0;color:#8e8e93;font-size:13px;">Screen</p>
+          <button class="choice" id="appearDay" type="button">
+            <span><strong>Day</strong><small>Light map and screen</small></span>
+            <span class="check" id="checkDay">✓</span>
+          </button>
+          <button class="choice" id="appearNight" type="button">
+            <span><strong>Night</strong><small>Dark map and screen</small></span>
+            <span class="check" id="checkNight">✓</span>
+          </button>
+        </div>
+
+        <div class="sheet" id="sheet">
+          <div class="handle"></div>
+          <div class="trip" id="tripPick">
+            <button class="trip-btn on" id="tripDrive" type="button">Drive</button>
+            <button class="trip-btn" id="tripRide" type="button">Ride</button>
+          </div>
+          <input id="query" placeholder="Address, place, or road" autocomplete="off" />
+          <div class="results" id="results"></div>
+        </div>
+
+        <div class="perm" id="perm">
+          <div>
+            <div style="font-size:42px;color:var(--accent)">◎</div>
+            <h2>Location needed</h2>
+            <p>Allow location so SpeedApp can show your speed, or skip and use the Bucharest preview.</p>
+            <button id="askLoc" type="button">Enable location</button>
+            <button id="skipLoc" type="button" style="background:#2c2c2e;color:#fff;margin-left:8px;">Skip</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const savedUnit = localStorage.getItem("speedUnit");
+    const savedAppearance = localStorage.getItem("appearance") === "day" ? "day" : "night";
+    const savedTravel = localStorage.getItem("travelMode") === "ride" ? "ride" : "drive";
+    const state = {
+      unit: savedUnit === "mph" ? "mph" : "kmh",
+      appearance: savedAppearance,
+      travelMode: savedTravel,
+      headingMode: localStorage.getItem("headingMode") === "north" ? "north" : "driver",
+      follow: true,
+      lateralOffset: 0,
+      zoom: { drive: Number(localStorage.getItem("driveZoom")) || 15, ride: Number(localStorage.getItem("rideZoom")) || 16 },
+      lat: 44.4268,
+      lng: 26.1025,
+      heading: 0,
+      speedMps: 0,
+      dest: null,
+      route: null,
+      remainingM: 0,
+      remainingS: 0,
+      totalS: 0,
+      road: null,
+      instruction: null,
+      demo: null,
+      cameras: [],
+    };
+
+    const tileUrls = {
+      day: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+      night: "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
+    };
+    const map = L.map("map", { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, doubleClickZoom: false, scrollWheelZoom: false }).setView([state.lat, state.lng], state.zoom[state.travelMode]);
+    const tiles = L.tileLayer(tileUrls[state.appearance], { maxZoom: 15, minZoom: 10 }).addTo(map);
+    const routeLayer = L.layerGroup().addTo(map);
+    const cameraLayer = L.layerGroup().addTo(map);
+    const you = L.marker([state.lat, state.lng], {
+      icon: L.divIcon({ className: "", html: '<div class="user-puck" id="userPuck"><div class="user-dot"></div><div class="user-chevron"></div></div>', iconSize: [16, 16], iconAnchor: [8, 8] })
+    }).addTo(map);
+
+    const $ = (id) => document.getElementById(id);
+    const phone = $("phone");
+    const MIN_HUD = 0.25, MAX_HUD = 0.75;
+    let hudFraction = Number(localStorage.getItem("hudFraction"));
+    if (!Number.isFinite(hudFraction)) hudFraction = 0.36;
+    const clampHud = (f) => Math.min(MAX_HUD, Math.max(MIN_HUD, f));
+    const snapHud = (f) => {
+      const stops = [MIN_HUD, 0.5, MAX_HUD];
+      let nearest = stops[0], gap = 1;
+      stops.forEach((s) => {
+        const d = Math.abs(s - f);
+        if (d < gap) { gap = d; nearest = s; }
+      });
+      return gap < 0.07 ? nearest : clampHud(f);
+    };
+    const applyHud = (f) => {
+      hudFraction = clampHud(f);
+      phone.style.setProperty("--hud", `${(hudFraction * 100).toFixed(1)}%`);
+      localStorage.setItem("hudFraction", String(hudFraction));
+      map.invalidateSize();
+    };
+    applyHud(hudFraction);
+    let splitDrag = null;
+    const split = $("split");
+    split.addEventListener("pointerdown", (e) => {
+      splitDrag = { id: e.pointerId, y: e.clientY, start: hudFraction };
+      split.setPointerCapture(e.pointerId);
+    });
+    split.addEventListener("pointermove", (e) => {
+      if (!splitDrag || e.pointerId !== splitDrag.id) return;
+      applyHud(splitDrag.start - (e.clientY - splitDrag.y) / phone.clientHeight);
+    });
+    const endSplit = (e) => {
+      if (!splitDrag || e.pointerId !== splitDrag.id) return;
+      applyHud(snapHud(hudFraction));
+      splitDrag = null;
+    };
+    split.addEventListener("pointerup", endSplit);
+    split.addEventListener("pointercancel", endSplit);
+    split.addEventListener("dblclick", () => applyHud(hudFraction < 0.5 ? MAX_HUD : MIN_HUD));
+    const fmtSpeed = (mps) => Math.round(state.unit === "kmh" ? mps * 3.6 : mps * 2.236936);
+    const maxSpeed = () => state.unit === "kmh" ? 170 : 110;
+    const ticks = () => {
+      const max = maxSpeed();
+      const values = [];
+      for (let v = 0; v <= max; v += 10) values.push(v);
+      return values;
+    };
+    const fmtDist = (m) => {
+      if (state.unit === "kmh") return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
+      const mi = m / 1609.344;
+      return mi < 0.1 ? `${Math.round(m * 3.28084)} ft` : `${mi.toFixed(mi >= 10 ? 0 : 1)} mi`;
+    };
+    const fmtEta = (s) => {
+      const minutes = Math.max(0, Math.round(Math.max(0, s) / 60));
+      return { hours: Math.floor(minutes / 60), minutes: minutes % 60 };
+    };
+    const etaText = (s) => {
+      const eta = fmtEta(s);
+      return eta.hours > 0 ? `${eta.hours}h ${String(eta.minutes).padStart(2, "0")}m` : `${eta.minutes} min`;
+    };
+    const compactETA = (s) => {
+      const eta = fmtEta(s);
+      return eta.hours > 0 ? `${eta.hours}h ${String(eta.minutes).padStart(2, "0")}m` : `${eta.minutes}m`;
+    };
+    const signedMinutes = (delta) => {
+      const minutes = Math.round(delta / 60);
+      if (minutes === 0) return "same";
+      return minutes > 0 ? `+${minutes}m` : `${minutes}m`;
+    };
+    const arrival = (s) => new Date(Date.now() + Math.max(0, s) * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+    const START = 135, SWEEP = 270, CX = 118, CY = 118;
+    const OUTER_R = 110, INNER_R = 96, TICK_OUTER = 101, LABEL_R = 84, DELTA_R = 73;
+    const polar = (r, deg) => {
+      const rad = deg * Math.PI / 180;
+      return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+    };
+    const arc = (r, progress) => {
+      const sweep = SWEEP * Math.min(Math.max(progress, 0.0001), 1);
+      const [x1, y1] = polar(r, START);
+      const [x2, y2] = polar(r, START + sweep);
+      const large = sweep > 180 ? 1 : 0;
+      return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+    };
+    const liveRemaining = () => {
+      if (!state.route) return null;
+      if (state.speedMps > 1.5 && state.remainingM > 0) return state.remainingM / state.speedMps;
+      return state.remainingS;
+    };
+
+    function drawGauge() {
+      const speed = fmtSpeed(state.speedMps);
+      const speedProg = Math.min(Math.max(speed / maxSpeed(), 0), 1);
+      const remaining = liveRemaining();
+      const hasRoute = remaining != null;
+      const css = getComputedStyle(document.body);
+      const accent = css.getPropertyValue("--accent").trim();
+      const time = css.getPropertyValue("--time").trim();
+      const track = css.getPropertyValue("--track").trim();
+      const primary = css.getPropertyValue("--primary").trim();
+      const tertiary = css.getPropertyValue("--tertiary").trim();
+      const secondary = css.getPropertyValue("--secondary").trim();
+      const [sx, sy] = polar(OUTER_R, START + SWEEP * speedProg);
+      const [tx, ty] = polar(INNER_R, START + SWEEP * speedProg);
+      const needleAngle = START + SWEEP * speedProg - 270;
+      const toKmh = (value) => state.unit === "kmh" ? value : value * 1.609344;
+      const paceTicks = (() => {
+        if (!hasRoute || state.remainingM <= 0 || speed < 8) return [];
+        const floor = state.unit === "kmh" ? 30 : 20;
+        const slower = [];
+        const faster = [];
+        let slowerTick = Math.floor((speed - 10) / 10) * 10;
+        while (slower.length < 3 && slowerTick >= floor) {
+          if (Math.abs(slowerTick - speed) >= 10) slower.push(slowerTick);
+          slowerTick -= 10;
+        }
+        let fasterTick = Math.ceil((speed + 10) / 10) * 10;
+        while (faster.length < 3 && fasterTick <= maxSpeed()) {
+          if (Math.abs(fasterTick - speed) >= 10) faster.push(fasterTick);
+          fasterTick += 10;
+        }
+        return slower.concat(faster);
+      })();
+
+      const tickMarks = ticks().map((value) => {
+        const p = value / maxSpeed();
+        const major = value % 20 === 0 || value === maxSpeed();
+        const [x1, y1] = polar(TICK_OUTER, START + SWEEP * p);
+        const [x2, y2] = polar(TICK_OUTER - (major ? 10 : 6), START + SWEEP * p);
+        const [lx, ly] = polar(LABEL_R, START + SWEEP * p);
+        return `
+          <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${tertiary}" stroke-width="${major ? 1.6 : 1}" stroke-linecap="round"></line>
+          <text class="tick" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="${major ? 9 : 7}" fill="${major ? secondary : tertiary}">${value}</text>
+        `;
+      }).join("");
+
+      let paceLabels = "";
+      paceTicks.forEach((value) => {
+        const atSpeed = state.remainingM / (toKmh(value) / 3.6);
+        const label = signedMinutes(atSpeed - remaining);
+        if (label === "same") return;
+        const [dx, dy] = polar(DELTA_R, START + SWEEP * (value / maxSpeed()));
+        const fill = atSpeed < remaining ? accent : secondary;
+        paceLabels += `<text class="pace-delta" x="${dx}" y="${dy}" text-anchor="middle" dominant-baseline="middle" fill="${fill}">${label}</text>`;
+      });
+
+      $("gauge").innerHTML = `
+        <path d="${arc(OUTER_R, 1)}" fill="none" stroke="${track}" stroke-width="14" stroke-linecap="round"></path>
+        <path d="${arc(OUTER_R, speedProg)}" fill="none" stroke="${accent}" stroke-width="14" stroke-linecap="round"></path>
+        <path d="${arc(INNER_R, 1)}" fill="none" stroke="${track}" stroke-width="5" stroke-linecap="round"></path>
+        ${hasRoute ? `<path d="${arc(INNER_R, speedProg)}" fill="none" stroke="${time}" stroke-width="5" stroke-linecap="round"></path>` : ""}
+        ${tickMarks}
+        ${paceLabels}
+        <circle cx="${sx}" cy="${sy}" r="6" fill="${accent}" stroke="${primary}" stroke-width="2"></circle>
+        ${hasRoute ? `<circle cx="${tx}" cy="${ty}" r="3.5" fill="${time}" stroke="${primary}" stroke-width="1.5"></circle>` : ""}
+        <g transform="rotate(${needleAngle} ${CX} ${CY})">
+          <polygon points="${CX},${CY - (INNER_R - 10)} ${CX + 6},${CY + 6} ${CX - 6},${CY + 6}" fill="${time}"></polygon>
+          <circle cx="${CX}" cy="${CY}" r="8" fill="${time}"></circle>
+          <circle cx="${CX}" cy="${CY}" r="3" fill="${primary}"></circle>
+        </g>
+      `;
+    }
+
+    function render() {
+      const remaining = liveRemaining();
+      const hasRoute = remaining != null;
+      $("value").textContent = String(fmtSpeed(state.speedMps));
+      $("unit").textContent = state.unit === "kmh" ? "km/h" : "mph";
+      $("eta").textContent = hasRoute ? `${etaText(remaining)} left` : "—";
+      $("eta").className = hasRoute ? "eta on" : "eta";
+      $("footer").textContent = hasRoute
+        ? `arrive ${arrival(remaining)}  ·  ${fmtDist(state.remainingM)}`
+        : "Drive to see arrival";
+      $("speedScrub").value = String(fmtSpeed(state.speedMps));
+      $("speedScrub").max = String(maxSpeed());
+      $("destBar").classList.toggle("nav", hasRoute);
+      $("destTitle").textContent = hasRoute
+        ? (state.instruction || "Continue on the highlighted route")
+        : (state.dest ? state.dest.name : "Where to?");
+      $("destSub").textContent = hasRoute
+        ? `in ${fmtDist(Math.max(state.remainingM * 0.08, 250))}  ·  ${state.road || "Fastest route"}`
+        : (state.dest ? "Finding the fastest route" : "Address, place, or road");
+      $("destIcon").textContent = hasRoute ? "➤" : (state.dest ? "⚑" : (state.travelMode === "ride" ? "🏍" : "🚗"));
+      $("clearBtn").hidden = !state.dest;
+      $("demoBtn").hidden = !hasRoute || Boolean(state.demo) || (state.route.geometry.coordinates || []).length < 8;
+      $("unitKmh").classList.toggle("on", state.unit === "kmh");
+      $("unitMph").classList.toggle("on", state.unit === "mph");
+      $("checkKmh").hidden = state.unit !== "kmh";
+      $("checkMph").hidden = state.unit !== "mph";
+      $("appearDay").classList.toggle("on", state.appearance === "day");
+      $("appearNight").classList.toggle("on", state.appearance === "night");
+      $("checkDay").hidden = state.appearance !== "day";
+      $("checkNight").hidden = state.appearance !== "night";
+      $("modeDrive").classList.toggle("on", state.travelMode === "drive");
+      $("modeRide").classList.toggle("on", state.travelMode === "ride");
+      $("checkDrive").hidden = state.travelMode !== "drive";
+      $("checkRide").hidden = state.travelMode !== "ride";
+      $("tripDrive").classList.toggle("on", state.travelMode === "drive");
+      $("tripRide").classList.toggle("on", state.travelMode === "ride");
+      $("headingDriver").classList.toggle("on", state.headingMode === "driver");
+      $("headingNorth").classList.toggle("on", state.headingMode === "north");
+      $("checkHeadingDriver").hidden = state.headingMode !== "driver";
+      $("checkHeadingNorth").hidden = state.headingMode !== "north";
+      $("headingBtn").textContent = state.headingMode === "north" ? "N" : "⬆";
+      $("headingBtn").setAttribute("aria-label", state.headingMode === "north" ? "North up" : "Driver view");
+      $("recenterBtn").hidden = state.follow;
+      const puck = document.getElementById("userPuck");
+      if (puck) puck.style.transform = `rotate(${state.headingMode === "north" ? state.heading : 0}deg)`;
+      drawGauge();
+      if (typeof updateCameraAlert === "function") updateCameraAlert();
+    }
+
+    function setUnit(unit) {
+      state.unit = unit;
+      localStorage.setItem("speedUnit", unit);
+      render();
+    }
+    $("unitKmh").onclick = () => setUnit("kmh");
+    $("unitMph").onclick = () => setUnit("mph");
+    $("speedScrub").addEventListener("input", () => {
+      const kmhOrMph = Number($("speedScrub").value);
+      state.speedMps = state.unit === "kmh" ? kmhOrMph / 3.6 : kmhOrMph / 2.236936;
+      render();
+    });
+    function setAppearance(mode) {
+      state.appearance = mode;
+      localStorage.setItem("appearance", mode);
+      document.body.className = mode;
+      tiles.setUrl(tileUrls[mode]);
+      render();
+    }
+    $("appearDay").onclick = () => setAppearance("day");
+    $("appearNight").onclick = () => setAppearance("night");
+    $("settingsBtn").onclick = () => $("settings").classList.add("open");
+
+    function setTravelMode(mode) {
+      state.travelMode = mode;
+      localStorage.setItem("travelMode", mode);
+      if (state.follow) applyFollowCamera();
+      render();
+    }
+    $("modeDrive").onclick = () => setTravelMode("drive");
+    $("modeRide").onclick = () => setTravelMode("ride");
+    $("tripDrive").onclick = (e) => { e.stopPropagation(); setTravelMode("drive"); };
+    $("tripRide").onclick = (e) => { e.stopPropagation(); setTravelMode("ride"); };
+
+    function setHeadingMode(mode) {
+      state.headingMode = mode;
+      localStorage.setItem("headingMode", mode);
+      setFollow(true);
+      render();
+    }
+    $("headingDriver").onclick = () => setHeadingMode("driver");
+    $("headingNorth").onclick = () => setHeadingMode("north");
+    $("headingBtn").onclick = () => setHeadingMode(state.headingMode === "driver" ? "north" : "driver");
+
+    function applyFollowCamera() {
+      if (!state.follow) return;
+      const travelHeading = ((state.heading) % 360 + 360) % 360;
+      const cameraHeading = state.headingMode === "north" ? 0 : travelHeading;
+      const aheadRad = travelHeading * Math.PI / 180;
+      const rightRad = (cameraHeading + 90) * Math.PI / 180;
+      const ahead = state.headingMode === "north" ? 0 : (state.travelMode === "ride" ? 0.0007 : 0.0011);
+      const latM = 1 / 111320;
+      const lngM = 1 / (111320 * Math.max(Math.cos(state.lat * Math.PI / 180), 0.2));
+      map.setView(
+        [
+          state.lat + Math.cos(aheadRad) * ahead + state.lateralOffset * Math.cos(rightRad) * latM,
+          state.lng + Math.sin(aheadRad) * ahead + state.lateralOffset * Math.sin(rightRad) * lngM,
+        ],
+        state.zoom[state.travelMode],
+        { animate: false }
+      );
+    }
+
+    function setFollow(on) {
+      state.follow = on;
+      if (on) {
+        map.dragging.disable();
+        map.touchZoom.disable();
+        map.doubleClickZoom.disable();
+        map.scrollWheelZoom.disable();
+        state.lateralOffset = 0;
+        applyFollowCamera();
+      } else {
+        map.dragging.enable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.scrollWheelZoom.enable();
+      }
+      render();
+    }
+    $("recenterBtn").onclick = () => setFollow(true);
+
+    let look = null;
+    const mapEl = document.getElementById("map");
+    const endLook = (e) => {
+      if (!look || (e && e.pointerId !== look.id)) return;
+      const dx = look.dx || 0;
+      localStorage.setItem(state.travelMode === "drive" ? "driveZoom" : "rideZoom", String(state.zoom[state.travelMode]));
+      look = null;
+      if (Math.abs(dx) >= 18) {
+        setFollow(false);
+        return;
+      }
+      state.lateralOffset = 0;
+      applyFollowCamera();
+    };
+    mapEl.addEventListener("pointerdown", (e) => {
+      if (!state.follow) return;
+      if (e.target.closest(".ui, .sheet, .demo, .perm, .note")) return;
+      look = { id: e.pointerId, x: e.clientX, y: e.clientY, zoom: state.zoom[state.travelMode], dx: 0 };
+    });
+    mapEl.addEventListener("pointermove", (e) => {
+      if (!look || e.pointerId !== look.id) return;
+      look.dx = e.clientX - look.x;
+      state.lateralOffset = -look.dx * (18 * Math.pow(2, 15 - look.zoom));
+      const zoom = Math.min(18, Math.max(8, look.zoom - (e.clientY - look.y) / 220));
+      state.zoom[state.travelMode] = zoom;
+      applyFollowCamera();
+    });
+    mapEl.addEventListener("pointerup", endLook);
+    mapEl.addEventListener("pointercancel", endLook);
+    mapEl.addEventListener("dblclick", (e) => {
+      if (!e.target.closest(".ui, .sheet, .demo, .perm")) setFollow(false);
+    });
+
+    $("destBar").onclick = (e) => {
+      if (e.target.id === "clearBtn") return;
+      $("sheet").classList.add("open");
+      $("query").focus();
+    };
+    $("clearBtn").onclick = (e) => {
+      e.stopPropagation();
+      stopDemo();
+      state.dest = null;
+      state.route = null;
+      state.road = null;
+      state.instruction = null;
+      routeLayer.clearLayers();
+      render();
+    };
+
+    let searchTimer;
+    $("query").addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      const q = $("query").value.trim();
+      if (q.length < 2) { $("results").innerHTML = ""; return; }
+      searchTimer = setTimeout(() => searchPlaces(q), 280);
+    });
+
+    async function searchPlaces(q) {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=${encodeURIComponent(q)}&addressdetails=1`;
+      const res = await fetch(url, { headers: { "Accept-Language": navigator.language } });
+      const items = await res.json();
+      $("results").innerHTML = items.map((item, i) =>
+        `<button class="hit" data-i="${i}"><strong>${item.display_name.split(",")[0]}</strong><small>${item.display_name}</small></button>`
+      ).join("") || `<div class="hit"><small>No matching destination found.</small></div>`;
+      $("results").querySelectorAll(".hit[data-i]").forEach((btn) => {
+        btn.onclick = () => choose(items[Number(btn.dataset.i)]);
+      });
+    }
+
+    async function choose(item) {
+      $("sheet").classList.remove("open");
+      $("query").value = "";
+      $("results").innerHTML = "";
+      state.dest = { name: item.display_name.split(",")[0], lat: Number(item.lat), lng: Number(item.lon) };
+      render();
+      await loadRoute();
+    }
+
+    async function loadRoute() {
+      if (!state.dest) return;
+      const url = `https://router.project-osrm.org/route/v1/driving/${state.lng},${state.lat};${state.dest.lng},${state.dest.lat}?overview=full&geometries=geojson&steps=true`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const route = data.routes && data.routes[0];
+      if (!route) return;
+      state.route = route;
+      state.remainingM = route.distance;
+      state.remainingS = route.duration;
+      state.totalS = route.duration;
+      const steps = route.legs[0]?.steps || [];
+      const named = steps.filter((s) => s.name && s.name !== "-").sort((a, b) => b.distance - a.distance)[0];
+      state.road = named?.name || "Fastest route";
+      state.instruction = named ? `Continue on ${named.name}` : "Head toward your destination";
+      routeLayer.clearLayers();
+      const latlngs = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+      L.polyline(latlngs, { color: getComputedStyle(document.body).getPropertyValue("--route").trim(), weight: 7, opacity: 0.95 }).addTo(routeLayer);
+      L.circleMarker([state.dest.lat, state.dest.lng], { radius: 8, color: "#6bc7ff", fillColor: "#6bc7ff", fillOpacity: 1 }).addTo(routeLayer);
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [80, 80] });
+      setFollow(false);
+      setTimeout(() => setFollow(true), 2200);
+      render();
+    }
+
+    function applyPosition(lat, lng, speed, heading) {
+      state.lat = lat;
+      state.lng = lng;
+      if (typeof speed === "number" && speed >= 0) state.speedMps = speed < 0.4 ? 0 : speed;
+      if (typeof heading === "number" && heading >= 0) state.heading = heading;
+      you.setLatLng([lat, lng]);
+      if (state.route) {
+        const left = remainingAlong(state.route, lat, lng);
+        state.remainingM = left;
+        state.remainingS = state.route.distance > 0 ? state.route.duration * (left / state.route.distance) : 0;
+      }
+      render();
+      applyFollowCamera();
+      updateCameraAlert();
+    }
+
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000, toR = Math.PI / 180;
+      const dLat = (lat2 - lat1) * toR, dLon = (lon2 - lon1) * toR;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function drawCameras() {
+      cameraLayer.clearLayers();
+      state.cameras.forEach((cam) => {
+        L.marker([cam.lat, cam.lng], {
+          icon: L.divIcon({ className: "", html: '<div class="cam-pin">•</div>', iconSize: [22, 22], iconAnchor: [11, 11] })
+        }).addTo(cameraLayer);
+      });
+    }
+
+    function bearingDegrees(lat1, lon1, lat2, lon2) {
+      const toR = Math.PI / 180;
+      const y = Math.sin((lon2 - lon1) * toR) * Math.cos(lat2 * toR);
+      const x = Math.cos(lat1 * toR) * Math.sin(lat2 * toR)
+        - Math.sin(lat1 * toR) * Math.cos(lat2 * toR) * Math.cos((lon2 - lon1) * toR);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+
+    function updateCameraAlert() {
+      let best = null;
+      state.cameras.forEach((cam) => {
+        const d = haversineMeters(state.lat, state.lng, cam.lat, cam.lng);
+        if (d >= 1000) return;
+        let delta = Math.abs(bearingDegrees(state.lat, state.lng, cam.lat, cam.lng) - state.heading);
+        if (delta > 180) delta = 360 - delta;
+        if (delta >= 75 && d >= 70) return;
+        if (!best || d < best.d) best = { cam, d };
+      });
+      const box = $("camWarn");
+      if (!best) { box.classList.remove("show", "hot"); return; }
+      const over = best.cam.limit && state.speedMps * 3.6 > best.cam.limit + 2;
+      box.classList.add("show");
+      box.classList.toggle("hot", Boolean(over));
+      $("camDetail").textContent = `${Math.round(best.d)} m`;
+      $("camLimit").textContent = best.cam.limit ? `${best.cam.limit} km/h` : "";
+    }
+
+    async function loadRoadCameras() {
+      const query = `[out:json][timeout:12];(node["highway"="speed_camera"](around:8000,${state.lat},${state.lng});node["enforcement"="maxspeed"](around:8000,${state.lat},${state.lng}););out body;`;
+      try {
+        const res = await fetch("https://overpass-api.de/api/interpreter", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
+          body: "data=" + encodeURIComponent(query),
+        });
+        const data = await res.json();
+        state.cameras = (data.elements || []).filter((el) => el.lat && el.lon).map((el) => {
+          const raw = (el.tags && el.tags.maxspeed) || "";
+          const num = parseInt(raw, 10);
+          return { id: el.id, lat: el.lat, lng: el.lon, limit: Number.isFinite(num) ? num : null };
+        });
+      } catch {
+        state.cameras = [
+          { id: 1, lat: state.lat + 0.003, lng: state.lng + 0.002, limit: 50 },
+          { id: 2, lat: state.lat + 0.006, lng: state.lng - 0.001, limit: 70 },
+        ];
+      }
+      if (!state.cameras.length) {
+        state.cameras = [
+          { id: 1, lat: state.lat + 0.003, lng: state.lng + 0.002, limit: 50 },
+          { id: 2, lat: state.lat + 0.006, lng: state.lng - 0.001, limit: 70 },
+        ];
+      }
+      drawCameras();
+      updateCameraAlert();
+    }
+
+    function remainingAlong(route, lat, lng) {
+      const coords = route.geometry.coordinates;
+      let best = Infinity, idx = 0;
+      coords.forEach(([x, y], i) => {
+        const d = (x - lng) ** 2 + (y - lat) ** 2;
+        if (d < best) { best = d; idx = i; }
+      });
+      let m = 0;
+      for (let i = idx; i < coords.length - 1; i++) {
+        m += haversine(coords[i][1], coords[i][0], coords[i + 1][1], coords[i + 1][0]);
+      }
+      return m;
+    }
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371000, toR = Math.PI / 180;
+      const dLat = (lat2 - lat1) * toR, dLon = (lon2 - lon1) * toR;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function startDemo() {
+      if (!state.route) return;
+      stopDemo();
+      const coords = state.route.geometry.coordinates;
+      let i = 0;
+      const speed = 22;
+      state.demo = setInterval(() => {
+        if (i >= coords.length - 1) { stopDemo(); state.speedMps = 0; render(); return; }
+        const [lng1, lat1] = coords[i];
+        const [lng2, lat2] = coords[i + 1];
+        const heading = (Math.atan2(lng2 - lng1, lat2 - lat1) * 180) / Math.PI;
+        applyPosition(lat1, lng1, speed, heading);
+        applyFollowCamera();
+        i += Math.max(1, Math.floor(coords.length / 220));
+      }, 220);
+      $("demoBtn").hidden = true;
+    }
+    function stopDemo() {
+      if (state.demo) clearInterval(state.demo);
+      state.demo = null;
+    }
+    $("demoBtn").onclick = startDemo;
+
+    function askLocation() {
+      if (!navigator.geolocation) { $("perm").classList.remove("open"); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          $("perm").classList.remove("open");
+          applyPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.speed, pos.coords.heading);
+          applyFollowCamera();
+        },
+        () => $("perm").classList.remove("open"),
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+      navigator.geolocation.watchPosition(
+        (pos) => applyPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.speed, pos.coords.heading),
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 1000 }
+      );
+    }
+    $("askLoc").onclick = askLocation;
+    $("skipLoc").onclick = () => $("perm").classList.remove("open");
+    document.addEventListener("click", (e) => {
+      if ($("sheet").classList.contains("open") && !e.target.closest("#sheet") && !e.target.closest("#destBar")) {
+        $("sheet").classList.remove("open");
+      }
+      if ($("settings").classList.contains("open") && !e.target.closest("#settings") && !e.target.closest("#settingsBtn")) {
+        $("settings").classList.remove("open");
+      }
+    });
+
+    function previewSample() {
+      state.speedMps = 24.2;
+      state.dest = { name: "Piața Unirii", lat: 44.427, lng: 26.102 };
+      state.route = {
+        distance: 42000,
+        duration: 4320,
+        geometry: { coordinates: [[state.lng, state.lat], [26.12, 44.45]] },
+        legs: [{ steps: [{ name: "DN1" }] }],
+      };
+      state.remainingM = 38400;
+      state.remainingS = 4320;
+      state.totalS = 5400;
+      state.road = "DN1";
+      state.instruction = "Continue on DN1";
+      render();
+      loadRoadCameras();
+    }
+
+    document.body.className = state.appearance;
+    previewSample();
+  </script>
+</body>
+</html>

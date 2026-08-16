@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SpeedApp uses your location to show your current driving speed, calculate the fastest route, and estimate when you will arrive.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SpeedApp uses your location to show your current driving speed, calculate the fastest route, and estimate when you will arrive.</string>
+</dict>
+</plist>
