@@ -6,17 +6,16 @@ Search a destination, then drive. The app shows **how fast you are going**, **ho
 
 ## What you see
 
-The screen is split: **map on top**, **HUD on the bottom**.
+Two tabs at the bottom: **Map** (full-screen Waze-style map) and **HUD** (speedometer).
 
 - **Search bar** — type an address, place, or road. SpeedApp draws the fastest route.
 - **Speed** — big number in the top-right of the HUD (`km/h` or `mph`).
-- **Blue arc** — current speed on the 0–170 dial (0–110 in mph).
-- **Red arc** — sits under the blue arc at the same speed. Remaining time at this pace is also shown under the dial (`26 min left`, arrival clock, remaining distance).
-- **Time marks on the dial** — under nearby speeds (about ±10 / 20 / 30 from what you are doing now):
+- **Red arc** — current speed on the 0–170 dial (0–110 in mph). The end of the arc is a round marker. Remaining time at this pace is also shown under the dial (`26 min left`, arrival clock, remaining distance).
+- **Time marks on the dial** — outside the arc, beside nearby speeds (about ±10 / 20 / 30 from what you are doing now). They stay on one circle so they do not cover each other:
   - slower speeds show time **lost** (`+31m`)
   - faster speeds show time **won** (`-8m`)
 - **Camera** — yellow camera icon in the lower-left when a speed camera is ahead within **1000 m**. Turns red if you are over the posted limit. Pins also appear on the map.
-- **Split handle** — the line between map and HUD. Drag it to grow the map or the HUD. Neither side can take the whole screen: the other always keeps about **25%**. Double-tap the handle to jump between a large map and a large HUD.
+- **Tabs** — **Map** has the search bar, settings and the map. **HUD** shows only the dial. Both keep updating while you look at the other one.
 
 Times on the dial are **“if you hold this speed for the rest of the trip.”** They ignore traffic lights and speed limits. On a short leftover they are a few minutes. On a long motorway they can be half an hour — useful when you are deciding whether extra speed is worth the fuel.
 
@@ -30,26 +29,27 @@ Times on the dial are **“if you hold this speed for the rest of the trip.”**
 ### Map
 
 - **Drive** vs **Ride** in Settings changes how close and steep the camera sits (car vs motorcycle).
-- **Driver view** turns the map with you. **North** keeps north at the top.
+- The map is Waze-style: it always turns so your direction of travel is **up**, and the arrow stays pointing up.
 - Slide left or right to look beside the route. Pinch or slide up and down to zoom. The map stays where you leave it.
 - Tap the **location** button to snap back to yourself.
 
 ### Settings
 
 - Trip: Drive or Ride
-- Map: Driver or North
 - Speed unit: km/h or mph (distance follows the same unit)
 - Screen: Day (light map) or Night (dark map)
 
 ## Web preview
 
-There is a browser mock of the HUD in `preview/`. It is not the iPhone app; it is for trying layout and numbers.
+There is a browser mock of the app in `preview/`. It is not the iPhone app; it is for trying layout and numbers. It works on Windows, no Xcode needed.
 
 ```bash
-python3 -m http.server 8765 --directory preview
+python -m http.server 8765 --directory preview
 ```
 
-Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Search a place, then use **Play preview drive** and the speed slider.
+Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/) (use another port if 8765 is taken). Search a place, then use **Play preview drive** (map rotates with the car) and, on the HUD tab, the speed slider.
+
+**No API key is needed.** The preview uses free OpenStreetMap tiles, Nominatim search, the public OSRM router and the public Overpass API.
 
 ## Project layout
 
@@ -58,11 +58,11 @@ SpeedApp/
   SpeedAppApp.swift          App entry
   Views/                     Driving screen, HUD, map, search, settings
   Services/                  Location, routing, place search, speed cameras
-  Utilities/                 Formatting, theme, drive/ride/map options
+  Utilities/                 Formatting, theme, drive/ride options
 preview/index.html           Browser HUD
 ```
 
-Routing uses **MapKit**. Speed cameras are loaded from **OpenStreetMap** (Overpass: `highway=speed_camera` and `enforcement=maxspeed`) around your position.
+Routing uses **MapKit**. Speed cameras are loaded from **OpenStreetMap** (Overpass: `highway=speed_camera` and `enforcement=maxspeed`) around your position. Overpass is free and needs no API key. If the main server is busy (HTTP 502/429) SpeedApp retries on a second public mirror.
 
 ## Privacy
 

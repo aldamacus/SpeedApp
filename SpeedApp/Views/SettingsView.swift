@@ -4,7 +4,6 @@ struct SettingsView: View {
     @Binding var unit: SpeedUnit
     @Binding var appearance: AppearanceMode
     @Binding var travelMode: TravelMode
-    @Binding var headingMode: MapHeadingMode
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -24,24 +23,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Trip")
                 } footer: {
-                    Text("Slide left or right to move the map. It stays where you leave it. Tap the location button to return to yourself. Pinch or slide up and down to zoom.")
-                }
-
-                Section {
-                    ForEach(MapHeadingMode.allCases) { option in
-                        choiceRow(
-                            title: option.settingsTitle,
-                            detail: option.settingsDetail,
-                            selected: headingMode == option,
-                            symbol: option.symbol
-                        ) {
-                            headingMode = option
-                        }
-                    }
-                } header: {
-                    Text("Map")
-                } footer: {
-                    Text("Driver view turns the map with you. North keeps north at the top.")
+                    Text("The map always turns so your direction is up. Slide left or right to look beside the route. Tap the location button to return to yourself. Pinch or slide up and down to zoom.")
                 }
 
                 Section {
@@ -129,5 +111,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(unit: .constant(.kilometersPerHour), appearance: .constant(.night), travelMode: .constant(.drive), headingMode: .constant(.driver))
+    SettingsView(unit: .constant(.kilometersPerHour), appearance: .constant(.night), travelMode: .constant(.drive))
 }

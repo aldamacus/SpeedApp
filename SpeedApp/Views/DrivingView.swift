@@ -3,6 +3,11 @@ import MapKit
 import SwiftUI
 import UIKit
 
+enum AppTab: Int {
+    case map = 0
+    case hud = 1
+}
+
 struct DrivingView: View {
     @EnvironmentObject private var locationManager: LocationManager
     @EnvironmentObject private var navigationManager: NavigationManager
@@ -11,18 +16,15 @@ struct DrivingView: View {
     @AppStorage("speedUnit") private var storedUnit: String = SpeedUnit.kilometersPerHour.rawValue
     @AppStorage("appearanceMode") private var storedAppearance: String = AppearanceMode.night.rawValue
     @AppStorage("travelMode") private var storedTravelMode: String = TravelMode.drive.rawValue
-    @AppStorage("mapHeadingMode") private var storedHeadingMode: String = MapHeadingMode.driver.rawValue
     @AppStorage("driveCameraDistance") private var driveCameraDistance: Double = 850
     @AppStorage("rideCameraDistance") private var rideCameraDistance: Double = 460
+    @AppStorage("selectedTab") private var selectedTab: Int = AppTab.map.rawValue
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var followUser = true
     @State private var showSearch = false
     @State private var showSettings = false
-    @State private var hudDragOrigin: Double?
     @State private var dropTarget: MapDropTarget?
     @State private var dropPulse = 0
-
-    @AppStorage("hudFraction") private var hudFraction: Double = 0.36
 
     private var unit: Binding<SpeedUnit> {
         Binding(
@@ -45,13 +47,6 @@ struct DrivingView: View {
         )
     }
 
-    private var headingMode: Binding<MapHeadingMode> {
-        Binding(
-            get: { MapHeadingMode(rawValue: storedHeadingMode) ?? .driver },
-            set: { storedHeadingMode = $0.rawValue }
-        )
-    }
-
     private var cameraDistance: Binding<CLLocationDistance> {
         Binding(
             get: {
@@ -70,76 +65,16 @@ struct DrivingView: View {
     private var colors: Palette { Theme.palette(appearance.wrappedValue) }
 
     var body: some View {
-        GeometryReader { geo in
-            let handle = Theme.splitHandleHeight
-            let hudBody = max(120, geo.size.height * CGFloat(hudFraction) - handle)
-            let mapHeight = geo.size.height - hudBody - handle
+        TabView(selection: $selectedTab) {
+            mapTab
+                .tabItem { Label("Map", systemImage: "map.fill") }
+                .tag(AppTab.map.rawValue)
 
-            VStack(spacing: 0) {
-                ZStack(alignment: .top) {
-                    RouteMapView(
-                        cameraPosition: $cameraPosition,
-                        followUser: $followUser,
-                        cameraDistance: cameraDistance,
-                        dropTarget: $dropTarget,
-                        travelMode: travelMode.wrappedValue,
-                        headingMode: headingMode.wrappedValue,
-                        onDropPin: handleDroppedPin
-                    )
-                    .ignoresSafeArea(edges: .top)
-
-                    LinearGradient(
-                        colors: [colors.overlayTop, .clear, .clear, colors.overlayBottom.opacity(0.35)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .ignoresSafeArea(edges: .top)
-                    .allowsHitTesting(false)
-
-                    VStack(spacing: 10) {
-                        header
-                        Spacer(minLength: 0)
-                            .allowsHitTesting(false)
-                        if let message = navigationManager.errorMessage, !navigationManager.hasRoute {
-                            Text(message)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                                .background(.red.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        }
-                        HStack {
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 8) {
-                                headingModeButton
-                                if !followUser {
-                                    locationButton
-                                        .transition(.scale(scale: 0.86).combined(with: .opacity))
-                                }
-                            }
-                        }
-                        if let dropTarget, !navigationManager.hasDestination {
-                            driveHereCard(dropTarget)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 8)
-                }
-                .frame(height: mapHeight)
-                .clipped()
-
-                VStack(spacing: 0) {
-                    splitHandle(totalHeight: geo.size.height)
-                    SpeedClusterView(unit: unit)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 6)
-                }
-                .frame(height: hudBody + handle)
-                .hudSheetSurface(stroke: colors.stroke)
-            }
+            hudTab
+                .tabItem { Label("HUD", systemImage: "speedometer") }
+                .tag(AppTab.hud.rawValue)
         }
-        .ignoresSafeArea(edges: .bottom)
+        .tint(Theme.accent(appearance.wrappedValue))
         .overlay {
             if needsPermissionPrompt {
                 permissionOverlay
@@ -174,7 +109,7 @@ struct DrivingView: View {
                 .preferredColorScheme(appearance.wrappedValue.colorScheme)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(unit: unit, appearance: appearance, travelMode: travelMode, headingMode: headingMode)
+            SettingsView(unit: unit, appearance: appearance, travelMode: travelMode)
         }
         .onChange(of: storedTravelMode) { _, _ in
             locationManager.applyTravelMode(travelMode.wrappedValue)
@@ -185,7 +120,6 @@ struct DrivingView: View {
         .animation(.snappy(duration: 0.25), value: storedAppearance)
         .animation(.snappy(duration: 0.28), value: navigationManager.hasRoute)
         .animation(.snappy(duration: 0.22), value: followUser)
-        .animation(.snappy(duration: 0.22), value: storedHeadingMode)
         .onChange(of: navigationManager.route?.polyline.pointCount) { _, _ in
             fitRouteIfNeeded()
         }
@@ -201,56 +135,65 @@ struct DrivingView: View {
         }
     }
 
-    private func splitHandle(totalHeight: CGFloat) -> some View {
-        Capsule()
-            .fill(colors.tertiary)
-            .frame(width: 42, height: 5)
-            .frame(maxWidth: .infinity)
-            .frame(height: Theme.splitHandleHeight)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 2)
-                    .onChanged { value in
-                        if hudDragOrigin == nil {
-                            hudDragOrigin = hudFraction
-                        }
-                        let next = (hudDragOrigin ?? hudFraction) - Double(value.translation.height) / max(Double(totalHeight), 1)
-                        hudFraction = min(Theme.maxHudFraction, max(Theme.minHudFraction, next))
-                    }
-                    .onEnded { _ in
-                        withAnimation(.snappy(duration: 0.22)) {
-                            hudFraction = snappedHudFraction(hudFraction)
-                        }
-                        hudDragOrigin = nil
-                    }
+    /// Tab 1: the full-screen map with search, settings and recenter.
+    private var mapTab: some View {
+        ZStack(alignment: .top) {
+            RouteMapView(
+                cameraPosition: $cameraPosition,
+                followUser: $followUser,
+                cameraDistance: cameraDistance,
+                dropTarget: $dropTarget,
+                travelMode: travelMode.wrappedValue,
+                onDropPin: handleDroppedPin
             )
-            .onTapGesture(count: 2) {
-                withAnimation(.snappy(duration: 0.28)) {
-                    hudFraction = hudFraction < 0.5 ? Theme.maxHudFraction : Theme.minHudFraction
+            .ignoresSafeArea(edges: .top)
+
+            LinearGradient(
+                colors: [colors.overlayTop, .clear, .clear, colors.overlayBottom.opacity(0.35)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+
+            VStack(spacing: 10) {
+                header
+                Spacer(minLength: 0)
+                    .allowsHitTesting(false)
+                if let message = navigationManager.errorMessage, !navigationManager.hasRoute {
+                    Text(message)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(.red.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-            }
-            .accessibilityLabel("Map and HUD split")
-            .accessibilityHint("Drag to resize. Double tap to switch between a large map and a large HUD.")
-            .accessibilityValue("HUD \(Int((hudFraction * 100).rounded())) percent")
-            .accessibilityAdjustableAction { direction in
-                withAnimation(.snappy(duration: 0.2)) {
-                    switch direction {
-                    case .increment:
-                        hudFraction = min(Theme.maxHudFraction, hudFraction + 0.25)
-                    case .decrement:
-                        hudFraction = max(Theme.minHudFraction, hudFraction - 0.25)
-                    default:
-                        break
+                if !followUser {
+                    HStack {
+                        Spacer()
+                        locationButton
+                            .transition(.scale(scale: 0.86).combined(with: .opacity))
                     }
-                    hudFraction = snappedHudFraction(hudFraction)
+                }
+                if let dropTarget, !navigationManager.hasDestination {
+                    driveHereCard(dropTarget)
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+        }
     }
 
-    private func snappedHudFraction(_ value: Double) -> Double {
-        let stops: [Double] = [Theme.minHudFraction, 0.5, Theme.maxHudFraction]
-        guard let nearest = stops.min(by: { abs($0 - value) < abs($1 - value) }) else { return value }
-        return abs(nearest - value) < 0.07 ? nearest : min(Theme.maxHudFraction, max(Theme.minHudFraction, value))
+    /// Tab 2: the speedometer HUD on a plain themed background.
+    private var hudTab: some View {
+        ZStack {
+            Color(uiColor: .systemBackground)
+                .ignoresSafeArea()
+            SpeedClusterView(unit: unit)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        }
     }
 
     private func handleDroppedPin(_ coordinate: CLLocationCoordinate2D) {
@@ -330,22 +273,6 @@ struct DrivingView: View {
         .padding(14)
         .hudSurface(cornerRadius: 22, stroke: colors.stroke)
         .accessibilityElement(children: .contain)
-    }
-
-    private var headingModeButton: some View {
-        Button {
-            headingMode.wrappedValue = headingMode.wrappedValue == .driver ? .north : .driver
-            followUser = true
-        } label: {
-            Image(systemName: headingMode.wrappedValue.symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.accent(appearance.wrappedValue))
-                .frame(width: Theme.locationButtonSize, height: Theme.locationButtonSize)
-                .hudSurface(cornerRadius: Theme.locationButtonSize / 2, stroke: colors.stroke)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(headingMode.wrappedValue.accessibilityLabel)
-        .accessibilityHint("Switches between driver view and north up.")
     }
 
     private var locationButton: some View {

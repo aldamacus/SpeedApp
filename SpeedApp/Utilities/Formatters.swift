@@ -118,52 +118,6 @@ enum TravelMode: String, CaseIterable, Identifiable {
     static let maxCameraDistance: CLLocationDistance = 16000
 }
 
-enum MapHeadingMode: String, CaseIterable, Identifiable {
-    case driver
-    case north
-
-    var id: String { rawValue }
-
-    var settingsTitle: String {
-        switch self {
-        case .driver: return "Driver"
-        case .north: return "North"
-        }
-    }
-
-    var settingsDetail: String {
-        switch self {
-        case .driver: return "Map turns with the car"
-        case .north: return "North stays at the top"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .driver: return "location.north.line.fill"
-        case .north: return "location.north.fill"
-        }
-    }
-
-    var accessibilityLabel: String {
-        switch self {
-        case .driver: return "Driver view"
-        case .north: return "North up"
-        }
-    }
-
-    var accessibilityHint: String {
-        switch self {
-        case .driver: return "Map follows the direction you are driving."
-        case .north: return "North stays at the top of the map."
-        }
-    }
-
-    mutating func toggle() {
-        self = self == .driver ? .north : .driver
-    }
-}
-
 struct TravelTime: Equatable {
     let hours: Int
     let minutes: Int
@@ -210,7 +164,10 @@ enum Formatters {
     static func signedMinutes(from delta: TimeInterval) -> String {
         let minutes = Int((delta / 60.0).rounded())
         if minutes == 0 { return "same" }
-        return minutes > 0 ? "+\(minutes)m" : "\(minutes)m"
+        let sign = minutes > 0 ? "+" : "-"
+        let absolute = abs(minutes)
+        if absolute < 60 { return "\(sign)\(absolute)m" }
+        return "\(sign)\(absolute / 60):\(String(format: "%02d", absolute % 60))h"
     }
 
     static func arrivalClock(_ seconds: TimeInterval) -> String {

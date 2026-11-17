@@ -13,9 +13,11 @@ struct RouteMapView: View {
     @Binding var cameraDistance: CLLocationDistance
     @Binding var dropTarget: MapDropTarget?
     let travelMode: TravelMode
-    let headingMode: MapHeadingMode
     let onDropPin: (CLLocationCoordinate2D) -> Void
 
+    /// Heading the map is currently rotated to. Smoothed so the map does not shake.
+    @State private var displayHeading: CLLocationDirection = 0
+    @State private var hasInitialHeading = false
     @State private var lateralOffset: CLLocationDistance = 0
     @State private var isLookingAround = false
     @State private var liveDistance: CLLocationDistance?
@@ -52,10 +54,8 @@ struct RouteMapView: View {
             Map(position: $cameraPosition, interactionModes: followUser ? [] : .all) {
                 if let location = locationManager.location {
                     Annotation("You", coordinate: location.coordinate, anchor: .center) {
-                        UserPuck(
-                            heading: locationManager.heading,
-                            northUp: headingMode == .north
-                        )
+                        // The map turns with the car, so the arrow always points up.
+                        NavigationArrow()
                     }
                 }
 
@@ -110,9 +110,6 @@ struct RouteMapView: View {
                 updateFollowCamera()
             }
             .onChange(of: travelMode) { _, _ in
-                updateFollowCamera()
-            }
-            .onChange(of: headingMode) { _, _ in
                 updateFollowCamera()
             }
             .onChange(of: followUser) { _, following in
@@ -193,34 +190,47 @@ struct RouteMapView: View {
     private func updateFollowCamera() {
         guard followUser, let location = locationManager.location else { return }
         let hasRoute = navigationManager.hasRoute
-        let travelHeading = normalizedHeading(locationManager.heading)
-        let cameraHeading = headingMode == .north ? 0 : travelHeading
+        let travelHeading = smoothedHeading()
         let distance = displayedDistance
         let defaultDistance = travelMode.defaultCameraDistance(hasRoute: hasRoute)
-        let lookAhead = headingMode == .north
-            ? 0
-            : travelMode.lookAhead(hasRoute: hasRoute) * max(1, distance / defaultDistance)
+        let lookAhead = travelMode.lookAhead(hasRoute: hasRoute) * max(1, distance / defaultDistance)
         var center = location.coordinate
         if lookAhead > 0 {
             center = center.shifting(meters: lookAhead, bearing: travelHeading)
         }
         if lateralOffset != 0 {
-            center = center.shifting(meters: lateralOffset, bearing: cameraHeading + 90)
+            center = center.shifting(meters: lateralOffset, bearing: travelHeading + 90)
         }
-        cameraPosition = .camera(
-            MapCamera(
-                centerCoordinate: center,
-                distance: distance,
-                heading: cameraHeading,
-                pitch: pitch(for: distance, hasRoute: hasRoute)
-            )
+        let camera = MapCamera(
+            centerCoordinate: center,
+            distance: distance,
+            heading: travelHeading,
+            pitch: pitch(for: distance, hasRoute: hasRoute)
         )
+        withAnimation(.linear(duration: 0.35)) {
+            cameraPosition = .camera(camera)
+        }
+    }
+
+    /// Low-pass filtered heading. Ignores small jitter and holds the last heading
+    /// while standing still, so the rotating map stays calm like Waze.
+    private func smoothedHeading() -> CLLocationDirection {
+        let target = normalizedHeading(locationManager.heading)
+        var delta = target - displayHeading
+        if delta > 180 { delta -= 360 }
+        if delta < -180 { delta += 360 }
+        let moving = locationManager.speedMetersPerSecond > 1
+        // First fix: jump straight to the real heading.
+        if !hasInitialHeading {
+            displayHeading = target
+            hasInitialHeading = true
+        } else if moving, abs(delta) > 2 {
+            displayHeading = normalizedHeading(displayHeading + delta * 0.4)
+        }
+        return displayHeading
     }
 
     private func pitch(for distance: CLLocationDistance, hasRoute: Bool) -> Double {
-        if headingMode == .north {
-            return 0
-        }
         let close = travelMode.cameraPitch(hasRoute: hasRoute)
         let far = 12.0
         let start = travelMode.defaultCameraDistance(hasRoute: hasRoute)
@@ -286,29 +296,48 @@ private struct SpeedCameraPin: View {
     }
 }
 
-private struct UserPuck: View {
+/// Waze-style navigation arrow: a fat arrowhead with a notched back, a thick white
+/// outline and a soft shadow. It always points up because the map rotates instead.
+private struct NavigationArrow: View {
     @Environment(\.appearance) private var appearance
-    let heading: CLLocationDirection
-    let northUp: Bool
+    @State private var pulse = false
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(Theme.accent(appearance).opacity(0.18))
-                .frame(width: 46, height: 46)
-            Circle()
+                .fill(Theme.accent(appearance).opacity(pulse ? 0.0 : 0.22))
+                .frame(width: 64, height: 64)
+                .scaleEffect(pulse ? 1.25 : 0.8)
+
+            ArrowheadShape()
                 .fill(Theme.accent(appearance))
-                .frame(width: 16, height: 16)
                 .overlay {
-                    Circle()
-                        .stroke(.white, lineWidth: 3)
+                    ArrowheadShape()
+                        .stroke(.white, style: StrokeStyle(lineWidth: 4, lineJoin: .round))
                 }
-            Image(systemName: "location.north.fill")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.white)
-                .offset(y: -17)
+                .frame(width: 34, height: 40)
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
         }
-        .rotationEffect(.degrees(northUp ? heading : 0))
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
+                pulse = true
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct ArrowheadShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        path.move(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + w, y: rect.minY + h))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.74))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + h))
+        path.closeSubpath()
+        return path
     }
 }
 

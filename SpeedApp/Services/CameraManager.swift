@@ -68,28 +68,50 @@ final class CameraManager: ObservableObject {
         );
         out body;
         """
-        guard let url = URL(string: "https://overpass-api.de/api/interpreter") else { return [] }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        request.setValue("SpeedApp/1.0", forHTTPHeaderField: "User-Agent")
-        request.httpBody = "data=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)".data(using: .utf8)
-        request.timeoutInterval = 14
+        // Overpass is a free public OpenStreetMap service: no API key is needed.
+        // Public servers are rate limited, so try a second mirror if the first one fails.
+        let endpoints = [
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.kumi.systems/api/interpreter"
+        ]
+        var formAllowed = CharacterSet.alphanumerics
+        formAllowed.insert(charactersIn: "-._~")
+        let body = "data=\(query.addingPercentEncoding(withAllowedCharacters: formAllowed) ?? query)".data(using: .utf8)
 
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let decoded = try JSONDecoder().decode(OverpassResponse.self, from: data)
-            return decoded.elements.compactMap { element in
-                guard let lat = element.lat, let lon = element.lon else { return nil }
-                return RoadCamera(
-                    id: element.id,
-                    coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                    speedLimitKmh: Self.parseSpeed(element.tags?["maxspeed"])
-                )
+        for endpoint in endpoints {
+            guard let url = URL(string: endpoint) else { continue }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            request.setValue("SpeedApp/1.0", forHTTPHeaderField: "User-Agent")
+            request.httpBody = body
+            request.timeoutInterval = 14
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    #if DEBUG
+                    print("Overpass \(endpoint) returned HTTP \(http.statusCode)")
+                    #endif
+                    continue
+                }
+                let decoded = try JSONDecoder().decode(OverpassResponse.self, from: data)
+                return decoded.elements.compactMap { element in
+                    guard let lat = element.lat, let lon = element.lon else { return nil }
+                    return RoadCamera(
+                        id: element.id,
+                        coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                        speedLimitKmh: Self.parseSpeed(element.tags?["maxspeed"])
+                    )
+                }
+            } catch {
+                #if DEBUG
+                print("Overpass \(endpoint) failed: \(error.localizedDescription)")
+                #endif
+                if Task.isCancelled { return [] }
             }
-        } catch {
-            return []
         }
+        return []
     }
 
     private static func parseSpeed(_ raw: String?) -> Int? {

@@ -19,6 +19,7 @@
       --track: rgba(0,0,0,.28);
       --stroke: rgba(255,255,255,.1);
       --glass: rgba(20,20,22,.62);
+      --bg: #0b0d10;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
@@ -45,7 +46,6 @@
       background: #000;
       display: flex;
       flex-direction: column;
-      --hud: 36%;
     }
     .map-pane {
       position: relative;
@@ -53,7 +53,11 @@
       min-height: 0;
       overflow: hidden;
     }
-    #map { position: absolute; inset: 0; }
+    /* In follow mode JS makes #map a larger square, centred on the car, and rotates it. */
+    #map {
+      position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+      transform-origin: 50% 50%;
+    }
     .scrim {
       position: absolute; inset: 0; pointer-events: none; z-index: 400;
       background: linear-gradient(180deg, rgba(0,0,0,.22) 0%, transparent 40%, transparent 70%, rgba(0,0,0,.28) 100%);
@@ -65,34 +69,35 @@
       pointer-events: none;
     }
     .hud-pane {
-      flex: 0 0 var(--hud);
-      height: var(--hud);
-      background: var(--glass);
-      -webkit-backdrop-filter: blur(22px);
-      backdrop-filter: blur(22px);
-      border-radius: 20px 20px 0 0;
-      border-top: 1px solid var(--stroke);
-      z-index: 550;
+      flex: 1 1 0;
+      background: var(--bg);
       display: flex;
       flex-direction: column;
       min-height: 0;
+      padding-top: 40px;
     }
-    .split {
-      flex: 0 0 28px;
-      height: 28px;
+    .tabbar {
+      flex: 0 0 auto;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: ns-resize;
-      touch-action: none;
-      z-index: 600;
+      padding: 6px 12px 14px;
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border-top: 1px solid var(--stroke);
+      z-index: 700;
     }
-    .split-line {
-      width: 42px;
-      height: 5px;
-      border-radius: 99px;
-      background: var(--tertiary);
+    .tab-btn {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      color: var(--tertiary);
+      font: 650 11px inherit;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 6px 0;
+      cursor: pointer;
     }
+    .tab-btn svg { width: 24px; height: 24px; fill: currentColor; }
+    .tab-btn.on { color: var(--accent); }
     .ui > * { pointer-events: auto; }
     .top { display: flex; gap: 8px; align-items: flex-start; }
     .bar, .icon-btn {
@@ -165,16 +170,17 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: flex-start;
       flex: 1;
     }
     .gauge-wrap {
       position: relative;
-      width: min(280px, 72%);
+      width: min(440px, 100%);
       height: auto;
       aspect-ratio: 1;
-      max-height: calc(100% - 36px);
-      margin: 8px auto 4px;
+      max-height: calc(100% - 188px);
+      margin: auto;
+      flex: 0 1 auto;
     }
     .speed-badge {
       position: absolute;
@@ -185,11 +191,16 @@
       pointer-events: none;
     }
     .gauge-wrap svg { width: 100%; height: 100%; display: block; }
+    .hud-bottom {
+      width: 100%;
+      margin-top: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
     .arrival {
-      position: absolute;
-      left: 0; right: 0; bottom: 12px;
       text-align: center;
-      pointer-events: none;
+      padding: 2px 16px 0;
     }
     .value {
       font-size: 48px; font-weight: 750; letter-spacing: -2px; line-height: .9;
@@ -197,18 +208,79 @@
     }
     .unit { margin-top: 0; font-size: 14px; font-weight: 650; color: var(--accent); }
     .eta {
-      font-size: 16px; font-weight: 750;
+      font-size: 30px; font-weight: 750; letter-spacing: -0.5px;
       font-variant-numeric: tabular-nums; color: var(--tertiary);
     }
     .eta.on { color: var(--time); }
-    .footer { margin-top: 2px; font-size: 11px; color: var(--secondary); }
+    .footer { margin-top: 2px; font-size: 17px; font-weight: 650; color: var(--secondary); }
+    .pace-bar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      width: calc(100% - 16px);
+      margin: 0 8px 8px;
+    }
+    .pace-cell {
+      text-align: center;
+      border-radius: 12px;
+      padding: 7px 1px 6px;
+      background: rgba(255,255,255,.07);
+      min-width: 0;
+    }
+    .pace-cell .d {
+      font-size: 13px; font-weight: 750; line-height: 1.1;
+      font-variant-numeric: tabular-nums; color: var(--secondary);
+    }
+    .pace-cell .s {
+      margin-top: 2px; font-size: 10px; font-weight: 650;
+      color: var(--tertiary); font-variant-numeric: tabular-nums;
+    }
+    .pace-cell.fast .d { color: var(--accent); }
+    .pace-cell.now {
+      background: var(--accent); color: #041018;
+    }
+    .pace-cell.now .d { font-size: 16px; color: #041018; }
+    .pace-cell.now .s { color: rgba(4,16,24,.7); }
+    .scrub-label {
+      font-size: 11px; font-weight: 650; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--tertiary);
+      margin: 8px 0 0;
+    }
+    .scrub-label.on { color: var(--accent); }
+    .scrub {
+      -webkit-appearance: none; appearance: none;
+      width: calc(100% - 28px);
+      height: 36px;
+      margin: 0 14px 8px;
+      background: transparent;
+      position: relative;
+      z-index: 4;
+      touch-action: pan-x;
+      cursor: pointer;
+    }
+    .scrub::-webkit-slider-runnable-track {
+      height: 10px; border-radius: 99px; background: rgba(255,255,255,.16);
+    }
+    .scrub::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 28px; height: 28px; margin-top: -9px;
+      border-radius: 50%; background: var(--accent);
+      border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    }
+    .scrub::-moz-range-track {
+      height: 10px; border-radius: 99px; background: rgba(255,255,255,.16);
+    }
+    .scrub::-moz-range-thumb {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+      border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    }
     .tick { font-size: 10px; font-weight: 650; fill: var(--tertiary); }
-    .pace-delta { font-size: 9px; font-weight: 750; }
+    .pace-delta { font-size: 10px; font-weight: 750; }
     .cam-badge {
       position: absolute;
       left: 14px;
-      bottom: 44px;
-      z-index: 3;
+      top: 10px;
+      z-index: 4;
       display: none;
       flex-direction: column;
       align-items: flex-start;
@@ -222,6 +294,31 @@
       display: flex; align-items: center; justify-content: center; font-size: 15px;
     }
     .cam-badge.hot .icon { background: #ff3b30; color: #fff; }
+    .turn-sign {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 4;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      pointer-events: none;
+    }
+    .turn-sign.show { display: flex; }
+    .turn-sign .arrow {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: var(--accent); color: #041018;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    }
+    .turn-sign.right .arrow svg { transform: scaleX(-1); }
+    .turn-sign .turn-dist {
+      font-size: 14px; font-weight: 750;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
     .cam-badge .dist { font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; }
     .cam-badge .lim { font-size: 11px; font-weight: 650; color: var(--secondary); }
     .cam-pin {
@@ -264,28 +361,35 @@
       margin-top: 16px; border: 0; border-radius: 12px; padding: 12px 18px;
       background: var(--accent); color: #041018; font: 650 16px inherit; cursor: pointer;
     }
-    .user-dot {
-      width: 16px; height: 16px; background: var(--accent); border: 3px solid #fff; border-radius: 50%;
-      box-shadow: 0 0 0 10px rgba(107,199,255,.22);
+    /* Waze-style arrow. The map rotates, so the arrow stays pointing up on screen. */
+    .user-puck {
+      position: relative; width: 64px; height: 64px;
+      transition: transform .35s linear;
     }
-    .user-puck { position: relative; width: 16px; height: 16px; }
-    .user-chevron {
-      position: absolute; left: 4px; top: -11px; width: 0; height: 0;
-      border-left: 4px solid transparent; border-right: 4px solid transparent;
-      border-bottom: 8px solid #fff;
+    .user-puck .pulse {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: var(--accent); opacity: .22;
+      animation: puckPulse 1.8s ease-out infinite;
+    }
+    .user-puck svg {
+      position: absolute; left: 15px; top: 12px; width: 34px; height: 40px;
+      overflow: visible; filter: drop-shadow(0 2px 3px rgba(0,0,0,.45));
+    }
+    @keyframes puckPulse {
+      from { transform: scale(.8); opacity: .22; }
+      to { transform: scale(1.25); opacity: 0; }
     }
     .map-controls { align-self: flex-end; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-    .heading-btn { margin-bottom: 0; }
     .leaflet-control-attribution { display: none; }
-    .note {
-      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-      z-index: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
-      color: rgba(255,255,255,.4); pointer-events: none;
+    .leaflet-tile-pane { filter: saturate(.55) brightness(1.02); }
+    body.night .leaflet-tile-pane {
+      filter: invert(1) hue-rotate(200deg) saturate(.45) brightness(.82) contrast(.92);
     }
     .hint {
       margin: 0 0 16px; color: rgba(255,255,255,.45); font-size: 13px; text-align: center;
     }
     body.day {
+      --bg: #f4f5f8;
       --accent: #1a7af5;
       --time: #db2929;
       --camera: #e8a318;
@@ -308,7 +412,13 @@
     body.day .hit { color: #12161c; border-color: #e5e5ea; }
     body.day .perm { background: rgba(255,255,255,.9); color: #12161c; }
     body.day .perm p { color: rgba(18,22,28,.55); }
-    body.day .note, body.day .hint { color: rgba(18,22,28,.4); }
+    body.day .hint { color: rgba(18,22,28,.4); }
+    body.day .turn-sign .arrow { color: #fff; }
+    body.day .pace-cell { background: rgba(0,0,0,.06); }
+    body.day .pace-cell.now { color: #fff; }
+    body.day .pace-cell.now .d, body.day .pace-cell.now .s { color: #fff; }
+    body.day .scrub::-webkit-slider-runnable-track,
+    body.day .scrub::-moz-range-track { background: rgba(0,0,0,.12); }
     body.day .handle { background: #c7c7cc; }
     @media (max-width: 480px) {
       .stage { padding: 0; }
@@ -320,12 +430,11 @@
 <body>
   <div class="stage">
     <div>
-      <p class="hint">Web preview of the iPhone HUD. Search a place, then tap Play preview drive.</p>
+      <p class="hint">Web preview of the iPhone app. Use the Map and HUD tabs. Search a place, then tap Play preview drive.</p>
       <div class="phone" id="phone">
         <div class="map-pane" id="mapPane">
           <div id="map"></div>
           <div class="scrim"></div>
-          <div class="note">Web preview</div>
           <div class="ui">
             <div class="top">
               <button class="bar" id="destBar" type="button">
@@ -340,16 +449,12 @@
             </div>
             <div class="spacer"></div>
             <div class="map-controls">
-              <button class="icon-btn recenter heading-btn" id="headingBtn" type="button" aria-label="Driver view">⬆</button>
               <button class="icon-btn recenter" id="recenterBtn" type="button" hidden aria-label="Current location">➤</button>
             </div>
             <button class="demo" id="demoBtn" type="button" hidden>Play preview drive</button>
           </div>
         </div>
-        <div class="hud-pane" id="hudPane">
-          <div class="split" id="split" role="separator" aria-orientation="horizontal" aria-label="Resize map and HUD">
-            <div class="split-line"></div>
-          </div>
+        <div class="hud-pane" id="hudPane" hidden>
           <div class="cluster">
             <div class="cam-badge" id="camWarn">
               <div class="icon" aria-hidden="true">
@@ -360,20 +465,43 @@
               <div class="dist" id="camDetail">1000 m</div>
               <div class="lim" id="camLimit"></div>
             </div>
+            <div class="turn-sign" id="turnSign">
+              <div class="arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor">
+                  <path d="M14.5 4.5 5 12l9.5 7.5v-4.2H20v-6.6h-5.5V4.5z"/>
+                </svg>
+              </div>
+              <div class="turn-dist" id="turnDist"></div>
+            </div>
             <div class="speed-badge">
               <div class="value" id="value">0</div>
               <div class="unit" id="unit">km/h</div>
             </div>
             <div class="gauge-wrap">
-              <svg id="gauge" viewBox="0 0 236 236" aria-hidden="true"></svg>
+              <svg id="gauge" viewBox="0 0 320 320" aria-hidden="true"></svg>
+            </div>
+            <div class="hud-bottom">
+              <div class="pace-bar" id="paceBar" aria-label="Time at nearby speeds"></div>
               <div class="arrival">
                 <div class="eta" id="eta">—</div>
                 <div class="footer" id="footer"></div>
+                <div class="scrub-label" id="scrubLabel">Test speed</div>
               </div>
+              <input class="scrub" id="speedScrub" type="range" min="0" max="170" step="1" value="87" aria-label="Test speed" />
             </div>
-            <input class="scrub" id="speedScrub" type="range" min="0" max="170" value="87" />
           </div>
         </div>
+
+        <nav class="tabbar" id="tabbar" aria-label="Views">
+          <button class="tab-btn on" id="tabMap" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 9 6.1 3.5 4.2A.7.7 0 0 0 2.5 4.8v13.4c0 .3.2.6.5.7L9 21l6-2.1 5.5 1.9c.5.2 1-.2 1-.7V6.7c0-.3-.2-.6-.5-.7L15 4Zm-5.2 2.9 4.4-1.5v11.7l-4.4 1.5V6.9Z"/></svg>
+            Map
+          </button>
+          <button class="tab-btn" id="tabHud" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a10 10 0 0 0-9.2 14 1 1 0 0 0 .9.6h16.6a1 1 0 0 0 .9-.6A10 10 0 0 0 12 4Zm0 2a8 8 0 0 1 7.6 5.5l-1.7.5a6 6 0 0 0-11.8 0l-1.7-.5A8 8 0 0 1 12 6Zm4.2 2.8-3.4 5.4a1.8 1.8 0 1 1-1.6-1l4.2-4.8a.5.5 0 0 1 .8.4Z"/></svg>
+            HUD
+          </button>
+        </nav>
 
         <div class="sheet" id="settings">
           <div class="handle"></div>
@@ -386,15 +514,6 @@
           <button class="choice" id="modeRide" type="button">
             <span><strong>Ride</strong><small>Motorcycle view. Hold the map to look and zoom.</small></span>
             <span class="check" id="checkRide">✓</span>
-          </button>
-          <p style="margin:16px 0 0;color:#8e8e93;font-size:13px;">Map</p>
-          <button class="choice" id="headingDriver" type="button">
-            <span><strong>Driver</strong><small>Map turns with the car</small></span>
-            <span class="check" id="checkHeadingDriver">✓</span>
-          </button>
-          <button class="choice" id="headingNorth" type="button">
-            <span><strong>North</strong><small>North stays at the top</small></span>
-            <span class="check" id="checkHeadingNorth">✓</span>
           </button>
           <p style="margin:16px 0 0;color:#8e8e93;font-size:13px;">Speed unit</p>
           <button class="choice" id="unitKmh" type="button">
@@ -448,8 +567,11 @@
       unit: savedUnit === "mph" ? "mph" : "kmh",
       appearance: savedAppearance,
       travelMode: savedTravel,
-      headingMode: localStorage.getItem("headingMode") === "north" ? "north" : "driver",
+      manualSpeed: false,
+      tab: localStorage.getItem("tab") === "hud" ? "hud" : "map",
       follow: true,
+      viewHeading: 0,
+      hasHeading: false,
       lateralOffset: 0,
       zoom: { drive: Number(localStorage.getItem("driveZoom")) || 15, ride: Number(localStorage.getItem("rideZoom")) || 16 },
       lat: 44.4268,
@@ -463,62 +585,103 @@
       totalS: 0,
       road: null,
       instruction: null,
+      turns: [],
+      turn: null,
       demo: null,
       cameras: [],
     };
 
-    const tileUrls = {
-      day: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-      night: "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
-    };
+    // Free OpenStreetMap tiles, no API key. (The old CARTO basemap tiles now show "API KEY REQUIRED".)
+    // Night mode is the same tiles darkened with a CSS filter, see body.night .leaflet-tile-pane.
+    const osmTiles = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const tileUrls = { day: osmTiles, night: osmTiles };
     const map = L.map("map", { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, doubleClickZoom: false, scrollWheelZoom: false }).setView([state.lat, state.lng], state.zoom[state.travelMode]);
-    const tiles = L.tileLayer(tileUrls[state.appearance], { maxZoom: 15, minZoom: 10 }).addTo(map);
+    const tiles = L.tileLayer(tileUrls[state.appearance], { maxZoom: 19, maxNativeZoom: 19, minZoom: 8 }).addTo(map);
     const routeLayer = L.layerGroup().addTo(map);
     const cameraLayer = L.layerGroup().addTo(map);
+    // Waze-style arrowhead: fat chevron with a notched back, white outline, blue fill.
+    const arrowSvg = '<svg viewBox="0 0 34 40" aria-hidden="true"><path d="M17 2 L32 38 L17 29 L2 38 Z" fill="#6bc7ff" stroke="#fff" stroke-width="4" stroke-linejoin="round"/></svg>';
     const you = L.marker([state.lat, state.lng], {
-      icon: L.divIcon({ className: "", html: '<div class="user-puck" id="userPuck"><div class="user-dot"></div><div class="user-chevron"></div></div>', iconSize: [16, 16], iconAnchor: [8, 8] })
+      icon: L.divIcon({ className: "", html: `<div class="user-puck" id="userPuck"><div class="pulse"></div>${arrowSvg}</div>`, iconSize: [64, 64], iconAnchor: [32, 32] })
     }).addTo(map);
 
     const $ = (id) => document.getElementById(id);
     const phone = $("phone");
-    const MIN_HUD = 0.25, MAX_HUD = 0.75;
-    let hudFraction = Number(localStorage.getItem("hudFraction"));
-    if (!Number.isFinite(hudFraction)) hudFraction = 0.36;
-    const clampHud = (f) => Math.min(MAX_HUD, Math.max(MIN_HUD, f));
-    const snapHud = (f) => {
-      const stops = [MIN_HUD, 0.5, MAX_HUD];
-      let nearest = stops[0], gap = 1;
-      stops.forEach((s) => {
-        const d = Math.abs(s - f);
-        if (d < gap) { gap = d; nearest = s; }
-      });
-      return gap < 0.07 ? nearest : clampHud(f);
-    };
-    const applyHud = (f) => {
-      hudFraction = clampHud(f);
-      phone.style.setProperty("--hud", `${(hudFraction * 100).toFixed(1)}%`);
-      localStorage.setItem("hudFraction", String(hudFraction));
-      map.invalidateSize();
-    };
-    applyHud(hudFraction);
-    let splitDrag = null;
-    const split = $("split");
-    split.addEventListener("pointerdown", (e) => {
-      splitDrag = { id: e.pointerId, y: e.clientY, start: hudFraction };
-      split.setPointerCapture(e.pointerId);
-    });
-    split.addEventListener("pointermove", (e) => {
-      if (!splitDrag || e.pointerId !== splitDrag.id) return;
-      applyHud(splitDrag.start - (e.clientY - splitDrag.y) / phone.clientHeight);
-    });
-    const endSplit = (e) => {
-      if (!splitDrag || e.pointerId !== splitDrag.id) return;
-      applyHud(snapHud(hudFraction));
-      splitDrag = null;
-    };
-    split.addEventListener("pointerup", endSplit);
-    split.addEventListener("pointercancel", endSplit);
-    split.addEventListener("dblclick", () => applyHud(hudFraction < 0.5 ? MAX_HUD : MIN_HUD));
+
+    // ---- Tabs: Map | HUD ----
+    function setTab(tab) {
+      state.tab = tab;
+      localStorage.setItem("tab", tab);
+      $("mapPane").hidden = tab !== "map";
+      $("hudPane").hidden = tab !== "hud";
+      $("tabMap").classList.toggle("on", tab === "map");
+      $("tabHud").classList.toggle("on", tab === "hud");
+      $("sheet").classList.remove("open");
+      $("settings").classList.remove("open");
+      if (tab === "map") {
+        layoutMap(true);
+        map.invalidateSize({ animate: false });
+        applyFollowCamera();
+      } else {
+        drawGauge();
+      }
+    }
+    $("tabMap").onclick = () => setTab("map");
+    $("tabHud").onclick = () => setTab("hud");
+
+    // ---- Waze-style map: in follow mode the map is rotated so the direction of travel is up ----
+    const anchorY = () => (state.travelMode === "ride" ? 0.72 : 0.66); // where the car sits on screen
+    let layoutMode = null;
+    let layoutSize = "";
+    function layoutMap(force) {
+      const pane = $("mapPane");
+      const w = pane.clientWidth, h = pane.clientHeight;
+      if (!w || !h) return;
+      const el = $("map");
+      const modeChanged = layoutMode !== state.follow;
+      layoutMode = state.follow;
+      el.style.transition = modeChanged || force ? "none" : "transform .35s linear";
+      let size;
+      if (state.follow) {
+        // Square big enough to cover the pane at any rotation, centred on the car.
+        const cx = w / 2, cy = h * anchorY();
+        const far = Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy));
+        const s = Math.ceil(far * 2);
+        el.style.width = `${s}px`;
+        el.style.height = `${s}px`;
+        el.style.left = `${cx - s / 2}px`;
+        el.style.top = `${cy - s / 2}px`;
+        el.style.transform = `rotate(${-state.viewHeading}deg)`;
+        size = `${s}`;
+      } else {
+        el.style.width = "100%";
+        el.style.height = "100%";
+        el.style.left = "0";
+        el.style.top = "0";
+        el.style.transform = "none";
+        size = `${w}x${h}`;
+      }
+      const key = `${state.follow}:${size}`;
+      if (key !== layoutSize) {
+        layoutSize = key;
+        map.invalidateSize({ animate: false });
+      }
+    }
+    // Low-pass filtered heading: ignores jitter and holds still when stopped, so the map stays calm.
+    function updateViewHeading() {
+      const target = ((state.heading % 360) + 360) % 360;
+      if (!state.hasHeading) {
+        state.viewHeading = target;
+        state.hasHeading = true;
+        return;
+      }
+      const delta = (((target - state.viewHeading) % 360) + 540) % 360 - 180;
+      if (state.speedMps > 1 && Math.abs(delta) > 2) state.viewHeading += delta * 0.4;
+    }
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => { layoutMap(true); applyFollowCamera(); }).observe($("mapPane"));
+    }
+
     const fmtSpeed = (mps) => Math.round(state.unit === "kmh" ? mps * 3.6 : mps * 2.236936);
     const maxSpeed = () => state.unit === "kmh" ? 170 : 110;
     const ticks = () => {
@@ -547,12 +710,40 @@
     const signedMinutes = (delta) => {
       const minutes = Math.round(delta / 60);
       if (minutes === 0) return "same";
-      return minutes > 0 ? `+${minutes}m` : `${minutes}m`;
+      const sign = minutes > 0 ? "+" : "-";
+      const absolute = Math.abs(minutes);
+      if (absolute < 60) return `${sign}${absolute}m`;
+      const hours = Math.floor(absolute / 60);
+      const rest = String(absolute % 60).padStart(2, "0");
+      return `${sign}${hours}:${rest}h`;
     };
     const arrival = (s) => new Date(Date.now() + Math.max(0, s) * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-    const START = 135, SWEEP = 270, CX = 118, CY = 118;
-    const OUTER_R = 110, INNER_R = 96, TICK_OUTER = 101, LABEL_R = 84, DELTA_R = 73;
+    function drawPaceBar(speed, remaining) {
+      const hasRoute = remaining != null && state.remainingM > 0 && speed >= 1;
+      const toKmh = (value) => state.unit === "kmh" ? value : value * 1.609344;
+      const unitLabel = state.unit === "kmh" ? "km/h" : "mph";
+      const cells = [-30, -20, -10, 0, 10, 20, 30].map((offset) => {
+        const value = Math.min(maxSpeed(), Math.max(0, Math.round(speed + offset)));
+        if (offset === 0) {
+          return `<div class="pace-cell now"><div class="d">${Math.round(speed)}</div><div class="s">${unitLabel}</div></div>`;
+        }
+        let delta = "";
+        if (hasRoute && value > 0) {
+          const atSpeed = state.remainingM / (toKmh(value) / 3.6);
+          const label = signedMinutes(atSpeed - remaining);
+          delta = label === "same" ? "0m" : label;
+        }
+        const kind = offset > 0 ? "fast" : "slow";
+        return `<div class="pace-cell ${kind}"><div class="d">${delta || "—"}</div><div class="s">${offset > 0 ? "+" : ""}${offset}</div></div>`;
+      }).join("");
+      $("paceBar").innerHTML = cells;
+    }
+
+    const START = 135, SWEEP = 270, CX = 160, CY = 160;
+    // One ring only. Time values sit outside it, on a single circle, spread along the arc.
+    const RED_W = 8;
+    const RING_R = 118, TICK_OUTER = 108, LABEL_R = 92, DELTA_R = 142;
     const polar = (r, deg) => {
       const rad = deg * Math.PI / 180;
       return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
@@ -582,8 +773,7 @@
       const primary = css.getPropertyValue("--primary").trim();
       const tertiary = css.getPropertyValue("--tertiary").trim();
       const secondary = css.getPropertyValue("--secondary").trim();
-      const [sx, sy] = polar(OUTER_R, START + SWEEP * speedProg);
-      const [tx, ty] = polar(INNER_R, START + SWEEP * speedProg);
+      const [tx, ty] = polar(RING_R, START + SWEEP * speedProg);
       const needleAngle = START + SWEEP * speedProg - 270;
       const toKmh = (value) => state.unit === "kmh" ? value : value * 1.609344;
       const paceTicks = (() => {
@@ -616,27 +806,47 @@
         `;
       }).join("");
 
-      let paceLabels = "";
+      // Keep every time value on the same circle. If two would land on top of each
+      // other, walk the later one along the arc instead of stepping it inward.
+      const paceItems = [];
       paceTicks.forEach((value) => {
         const atSpeed = state.remainingM / (toKmh(value) / 3.6);
         const label = signedMinutes(atSpeed - remaining);
         if (label === "same") return;
-        const [dx, dy] = polar(DELTA_R, START + SWEEP * (value / maxSpeed()));
-        const fill = atSpeed < remaining ? accent : secondary;
-        paceLabels += `<text class="pace-delta" x="${dx}" y="${dy}" text-anchor="middle" dominant-baseline="middle" fill="${fill}">${label}</text>`;
+        paceItems.push({
+          label,
+          faster: atSpeed < remaining,
+          angle: START + SWEEP * (value / maxSpeed()),
+        });
       });
+      paceItems.sort((a, b) => a.angle - b.angle);
+      const labelWidth = (text) => Math.max(30, text.length * 6.6);
+      for (let i = 1; i < paceItems.length; i++) {
+        const need = (labelWidth(paceItems[i - 1].label) + labelWidth(paceItems[i].label)) / 2 + 4;
+        const minDeg = 2 * Math.asin(Math.min(0.95, need / (2 * DELTA_R))) * 180 / Math.PI;
+        if (paceItems[i].angle < paceItems[i - 1].angle + minDeg) {
+          paceItems[i].angle = paceItems[i - 1].angle + minDeg;
+        }
+      }
+      if (paceItems.length) {
+        const end = START + SWEEP;
+        const overflow = paceItems[paceItems.length - 1].angle - end;
+        if (overflow > 0) paceItems.forEach((item) => { item.angle -= overflow; });
+      }
+      const paceLabels = paceItems.map((item) => {
+        const [dx, dy] = polar(DELTA_R, item.angle);
+        const fill = item.faster ? accent : secondary;
+        return `<text class="pace-delta" x="${dx.toFixed(1)}" y="${dy.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${fill}">${item.label}</text>`;
+      }).join("");
 
       $("gauge").innerHTML = `
-        <path d="${arc(OUTER_R, 1)}" fill="none" stroke="${track}" stroke-width="14" stroke-linecap="round"></path>
-        <path d="${arc(OUTER_R, speedProg)}" fill="none" stroke="${accent}" stroke-width="14" stroke-linecap="round"></path>
-        <path d="${arc(INNER_R, 1)}" fill="none" stroke="${track}" stroke-width="5" stroke-linecap="round"></path>
-        ${hasRoute ? `<path d="${arc(INNER_R, speedProg)}" fill="none" stroke="${time}" stroke-width="5" stroke-linecap="round"></path>` : ""}
+        <path d="${arc(RING_R, 1)}" fill="none" stroke="${track}" stroke-width="${RED_W}" stroke-linecap="round"></path>
+        ${hasRoute ? `<path d="${arc(RING_R, speedProg)}" fill="none" stroke="${time}" stroke-width="${RED_W}" stroke-linecap="round"></path>` : ""}
         ${tickMarks}
         ${paceLabels}
-        <circle cx="${sx}" cy="${sy}" r="6" fill="${accent}" stroke="${primary}" stroke-width="2"></circle>
-        ${hasRoute ? `<circle cx="${tx}" cy="${ty}" r="3.5" fill="${time}" stroke="${primary}" stroke-width="1.5"></circle>` : ""}
+        ${hasRoute ? `<circle cx="${tx}" cy="${ty}" r="8" fill="${time}" stroke="${primary}" stroke-width="2.5"></circle>` : ""}
         <g transform="rotate(${needleAngle} ${CX} ${CY})">
-          <polygon points="${CX},${CY - (INNER_R - 10)} ${CX + 6},${CY + 6} ${CX - 6},${CY + 6}" fill="${time}"></polygon>
+          <polygon points="${CX},${CY - (RING_R - 18)} ${CX + 6},${CY + 6} ${CX - 6},${CY + 6}" fill="${time}"></polygon>
           <circle cx="${CX}" cy="${CY}" r="8" fill="${time}"></circle>
           <circle cx="${CX}" cy="${CY}" r="3" fill="${primary}"></circle>
         </g>
@@ -653,16 +863,32 @@
       $("footer").textContent = hasRoute
         ? `arrive ${arrival(remaining)}  ·  ${fmtDist(state.remainingM)}`
         : "Drive to see arrival";
-      $("speedScrub").value = String(fmtSpeed(state.speedMps));
+      if (document.activeElement !== $("speedScrub")) {
+        $("speedScrub").value = String(fmtSpeed(state.speedMps));
+      }
       $("speedScrub").max = String(maxSpeed());
+      $("scrubLabel").textContent = state.manualSpeed ? "Test speed" : "Test speed · drag to override GPS";
+      $("scrubLabel").classList.toggle("on", Boolean(state.manualSpeed));
+      drawPaceBar(fmtSpeed(state.speedMps), remaining);
+      updateTurn();
+      const turn = hasRoute ? state.turn : null;
+      $("turnSign").classList.toggle("show", Boolean(turn));
+      $("turnSign").classList.toggle("right", turn?.side === "right");
+      if (turn) $("turnDist").textContent = fmtDist(turn.meters);
       $("destBar").classList.toggle("nav", hasRoute);
-      $("destTitle").textContent = hasRoute
-        ? (state.instruction || "Continue on the highlighted route")
-        : (state.dest ? state.dest.name : "Where to?");
-      $("destSub").textContent = hasRoute
-        ? `in ${fmtDist(Math.max(state.remainingM * 0.08, 250))}  ·  ${state.road || "Fastest route"}`
-        : (state.dest ? "Finding the fastest route" : "Address, place, or road");
-      $("destIcon").textContent = hasRoute ? "➤" : (state.dest ? "⚑" : (state.travelMode === "ride" ? "🏍" : "🚗"));
+      $("destTitle").textContent = turn
+        ? (turn.side === "right" ? "Turn right" : "Turn left")
+        : (hasRoute
+          ? (state.instruction || "Continue on the highlighted route")
+          : (state.dest ? state.dest.name : "Where to?"));
+      $("destSub").textContent = turn
+        ? `in ${fmtDist(turn.meters)}${turn.name ? `  ·  ${turn.name}` : ""}`
+        : (hasRoute
+          ? `in ${fmtDist(Math.max(state.remainingM * 0.08, 250))}  ·  ${state.road || "Fastest route"}`
+          : (state.dest ? "Finding the fastest route" : "Address, place, or road"));
+      $("destIcon").textContent = turn
+        ? (turn.side === "right" ? "↱" : "↰")
+        : (hasRoute ? "➤" : (state.dest ? "⚑" : (state.travelMode === "ride" ? "🏍" : "🚗")));
       $("clearBtn").hidden = !state.dest;
       $("demoBtn").hidden = !hasRoute || Boolean(state.demo) || (state.route.geometry.coordinates || []).length < 8;
       $("unitKmh").classList.toggle("on", state.unit === "kmh");
@@ -679,16 +905,11 @@
       $("checkRide").hidden = state.travelMode !== "ride";
       $("tripDrive").classList.toggle("on", state.travelMode === "drive");
       $("tripRide").classList.toggle("on", state.travelMode === "ride");
-      $("headingDriver").classList.toggle("on", state.headingMode === "driver");
-      $("headingNorth").classList.toggle("on", state.headingMode === "north");
-      $("checkHeadingDriver").hidden = state.headingMode !== "driver";
-      $("checkHeadingNorth").hidden = state.headingMode !== "north";
-      $("headingBtn").textContent = state.headingMode === "north" ? "N" : "⬆";
-      $("headingBtn").setAttribute("aria-label", state.headingMode === "north" ? "North up" : "Driver view");
       $("recenterBtn").hidden = state.follow;
+      // The map turns with the car, so in follow mode the arrow cancels the map rotation and points up.
       const puck = document.getElementById("userPuck");
-      if (puck) puck.style.transform = `rotate(${state.headingMode === "north" ? state.heading : 0}deg)`;
-      drawGauge();
+      if (puck) puck.style.transform = `rotate(${state.follow ? state.viewHeading : state.heading}deg)`;
+      if (state.tab === "hud") drawGauge();
       if (typeof updateCameraAlert === "function") updateCameraAlert();
     }
 
@@ -701,7 +922,12 @@
     $("unitMph").onclick = () => setUnit("mph");
     $("speedScrub").addEventListener("input", () => {
       const kmhOrMph = Number($("speedScrub").value);
+      state.manualSpeed = true;
       state.speedMps = state.unit === "kmh" ? kmhOrMph / 3.6 : kmhOrMph / 2.236936;
+      render();
+    });
+    $("speedScrub").addEventListener("dblclick", () => {
+      state.manualSpeed = false;
       render();
     });
     function setAppearance(mode) {
@@ -726,29 +952,17 @@
     $("tripDrive").onclick = (e) => { e.stopPropagation(); setTravelMode("drive"); };
     $("tripRide").onclick = (e) => { e.stopPropagation(); setTravelMode("ride"); };
 
-    function setHeadingMode(mode) {
-      state.headingMode = mode;
-      localStorage.setItem("headingMode", mode);
-      setFollow(true);
-      render();
-    }
-    $("headingDriver").onclick = () => setHeadingMode("driver");
-    $("headingNorth").onclick = () => setHeadingMode("north");
-    $("headingBtn").onclick = () => setHeadingMode(state.headingMode === "driver" ? "north" : "driver");
-
     function applyFollowCamera() {
-      if (!state.follow) return;
-      const travelHeading = ((state.heading) % 360 + 360) % 360;
-      const cameraHeading = state.headingMode === "north" ? 0 : travelHeading;
-      const aheadRad = travelHeading * Math.PI / 180;
-      const rightRad = (cameraHeading + 90) * Math.PI / 180;
-      const ahead = state.headingMode === "north" ? 0 : (state.travelMode === "ride" ? 0.0007 : 0.0011);
+      if (!state.follow || state.tab !== "map") return;
+      layoutMap();
+      // The map is centred on the car; the look-ahead comes from the car sitting low on screen.
+      const rightRad = (state.viewHeading + 90) * Math.PI / 180;
       const latM = 1 / 111320;
       const lngM = 1 / (111320 * Math.max(Math.cos(state.lat * Math.PI / 180), 0.2));
       map.setView(
         [
-          state.lat + Math.cos(aheadRad) * ahead + state.lateralOffset * Math.cos(rightRad) * latM,
-          state.lng + Math.sin(aheadRad) * ahead + state.lateralOffset * Math.sin(rightRad) * lngM,
+          state.lat + state.lateralOffset * Math.cos(rightRad) * latM,
+          state.lng + state.lateralOffset * Math.sin(rightRad) * lngM,
         ],
         state.zoom[state.travelMode],
         { animate: false }
@@ -769,6 +983,7 @@
         map.touchZoom.enable();
         map.doubleClickZoom.enable();
         map.scrollWheelZoom.enable();
+        layoutMap();
       }
       render();
     }
@@ -819,6 +1034,8 @@
       state.route = null;
       state.road = null;
       state.instruction = null;
+      state.turns = [];
+      state.turn = null;
       routeLayer.clearLayers();
       render();
     };
@@ -852,6 +1069,38 @@
       await loadRoute();
     }
 
+    function turnSide(modifier) {
+      if (!modifier) return null;
+      if (modifier.includes("right")) return "right";
+      if (modifier.includes("left")) return "left";
+      return null;
+    }
+
+    // OSRM puts the maneuver at the start of each step. Skip the departure.
+    function indexTurns(steps) {
+      let along = 0;
+      const turns = [];
+      steps.forEach((step) => {
+        const type = step.maneuver && step.maneuver.type;
+        const side = type === "depart" || type === "arrive" ? null : turnSide(step.maneuver && step.maneuver.modifier);
+        if (side) {
+          const name = step.name && step.name !== "-" ? step.name : "";
+          turns.push({ side, along, name });
+        }
+        along += step.distance || 0;
+      });
+      return turns;
+    }
+
+    function updateTurn() {
+      if (!state.route || !state.turns.length) { state.turn = null; return; }
+      const traveled = Math.max(0, state.route.distance - state.remainingM);
+      const next = state.turns.find((turn) => turn.along > traveled + 30);
+      state.turn = next
+        ? { side: next.side, meters: Math.max(0, next.along - traveled), name: next.name }
+        : null;
+    }
+
     async function loadRoute() {
       if (!state.dest) return;
       const url = `https://router.project-osrm.org/route/v1/driving/${state.lng},${state.lat};${state.dest.lng},${state.dest.lat}?overview=full&geometries=geojson&steps=true`;
@@ -867,6 +1116,7 @@
       const named = steps.filter((s) => s.name && s.name !== "-").sort((a, b) => b.distance - a.distance)[0];
       state.road = named?.name || "Fastest route";
       state.instruction = named ? `Continue on ${named.name}` : "Head toward your destination";
+      state.turns = indexTurns(steps);
       routeLayer.clearLayers();
       const latlngs = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
       L.polyline(latlngs, { color: getComputedStyle(document.body).getPropertyValue("--route").trim(), weight: 7, opacity: 0.95 }).addTo(routeLayer);
@@ -880,8 +1130,11 @@
     function applyPosition(lat, lng, speed, heading) {
       state.lat = lat;
       state.lng = lng;
-      if (typeof speed === "number" && speed >= 0) state.speedMps = speed < 0.4 ? 0 : speed;
+      if (!state.manualSpeed && typeof speed === "number" && speed >= 0) {
+        state.speedMps = speed < 0.4 ? 0 : speed;
+      }
       if (typeof heading === "number" && heading >= 0) state.heading = heading;
+      updateViewHeading();
       you.setLatLng([lat, lng]);
       if (state.route) {
         const left = remainingAlong(state.route, lat, lng);
@@ -938,29 +1191,31 @@
 
     async function loadRoadCameras() {
       const query = `[out:json][timeout:12];(node["highway"="speed_camera"](around:8000,${state.lat},${state.lng});node["enforcement"="maxspeed"](around:8000,${state.lat},${state.lng}););out body;`;
-      try {
-        const res = await fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
-          body: "data=" + encodeURIComponent(query),
-        });
-        const data = await res.json();
-        state.cameras = (data.elements || []).filter((el) => el.lat && el.lon).map((el) => {
-          const raw = (el.tags && el.tags.maxspeed) || "";
-          const num = parseInt(raw, 10);
-          return { id: el.id, lat: el.lat, lng: el.lon, limit: Number.isFinite(num) ? num : null };
-        });
-      } catch {
-        state.cameras = [
-          { id: 1, lat: state.lat + 0.003, lng: state.lng + 0.002, limit: 50 },
-          { id: 2, lat: state.lat + 0.006, lng: state.lng - 0.001, limit: 70 },
-        ];
-      }
-      if (!state.cameras.length) {
-        state.cameras = [
-          { id: 1, lat: state.lat + 0.003, lng: state.lng + 0.002, limit: 50 },
-          { id: 2, lat: state.lat + 0.006, lng: state.lng - 0.001, limit: 70 },
-        ];
+      // Overpass is a free public OpenStreetMap service: no API key is needed.
+      // It is rate limited, so fall back to a second public mirror when the first fails.
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+      ];
+      state.cameras = [];
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
+            body: "data=" + encodeURIComponent(query),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          state.cameras = (data.elements || []).filter((el) => el.lat && el.lon).map((el) => {
+            const raw = (el.tags && el.tags.maxspeed) || "";
+            const num = parseInt(raw, 10);
+            return { id: el.id, lat: el.lat, lng: el.lon, limit: Number.isFinite(num) ? num : null };
+          });
+          break;
+        } catch (err) {
+          console.warn(`Overpass ${endpoint} failed:`, err);
+        }
       }
       drawCameras();
       updateCameraAlert();
@@ -994,12 +1249,13 @@
       const speed = 22;
       state.demo = setInterval(() => {
         if (i >= coords.length - 1) { stopDemo(); state.speedMps = 0; render(); return; }
+        const step = Math.max(1, Math.floor(coords.length / 220));
         const [lng1, lat1] = coords[i];
-        const [lng2, lat2] = coords[i + 1];
-        const heading = (Math.atan2(lng2 - lng1, lat2 - lat1) * 180) / Math.PI;
+        // Look a few points ahead so the heading follows the road smoothly.
+        const [lng2, lat2] = coords[Math.min(i + step * 2, coords.length - 1)];
+        const heading = bearingDegrees(lat1, lng1, lat2, lng2);
         applyPosition(lat1, lng1, speed, heading);
-        applyFollowCamera();
-        i += Math.max(1, Math.floor(coords.length / 220));
+        i += step;
       }, 220);
       $("demoBtn").hidden = true;
     }
@@ -1057,6 +1313,7 @@
 
     document.body.className = state.appearance;
     previewSample();
+    setTab(state.tab);
   </script>
 </body>
 </html>

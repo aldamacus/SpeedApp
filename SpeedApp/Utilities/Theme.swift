@@ -79,11 +79,6 @@ enum Theme {
     static let locationButtonSize: CGFloat = 40
     static let pillRadius: CGFloat = 18
     static let hudRadius: CGFloat = 28
-    static let splitHandleHeight: CGFloat = 28
-    static let minHudFraction: Double = 0.25
-    static let maxHudFraction: Double = 0.75
-    static let defaultHudFraction: Double = 0.36
-
     static let dayAccent = Color(red: 0.1, green: 0.48, blue: 0.96)
     static let nightAccent = Color(red: 0.42, green: 0.78, blue: 1.0)
     static let dayTime = Color(red: 0.86, green: 0.16, blue: 0.16)

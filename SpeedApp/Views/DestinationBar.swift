@@ -61,8 +61,14 @@ struct DestinationBar: View {
     }
 
     private var leadingSymbol: String {
+        if navigationManager.nextTurnSide == "left" {
+            return "arrow.turn.up.left"
+        }
+        if navigationManager.nextTurnSide == "right" {
+            return "arrow.turn.up.right"
+        }
         if navigationManager.hasRoute {
-            return "arrow.triangle.turn.up.right.diamond.fill"
+            return "arrow.up"
         }
         let mode = TravelMode(rawValue: storedTravelMode) ?? .drive
         return navigationManager.hasDestination ? "flag.checkered" : mode.symbol

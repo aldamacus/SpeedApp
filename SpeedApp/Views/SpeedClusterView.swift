@@ -13,18 +13,22 @@ struct SpeedClusterView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            SpeedometerGauge(
-                speed: speedValue,
-                maxSpeed: unit.gaugeMaximum,
-                unit: unit,
-                remainingTime: liveRemainingTime,
-                remainingMeters: navigationManager.hasRoute ? navigationManager.remainingDistance : 0,
-                remainingDistanceText: navigationManager.hasRoute
-                    ? Formatters.distance(navigationManager.remainingDistance, unit: unit)
-                    : nil
-            )
-            .padding(.top, 20)
-            .padding(.bottom, 4)
+            VStack(spacing: 10) {
+                SpeedometerGauge(
+                    speed: speedValue,
+                    maxSpeed: unit.gaugeMaximum,
+                    unit: unit,
+                    remainingTime: liveRemainingTime,
+                    remainingMeters: navigationManager.hasRoute ? navigationManager.remainingDistance : 0
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 8)
+
+                paceStrip
+
+                arrivalReadout
+                    .padding(.bottom, 4)
+            }
 
             speedBadge
                 .padding(.top, 4)
@@ -32,9 +36,15 @@ struct SpeedClusterView: View {
 
             if let alert = cameraManager.alert {
                 cameraBadge(alert)
-                    .padding(.bottom, 12)
+                    .padding(.top, 4)
                     .padding(.leading, 14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+
+            if let side = navigationManager.nextTurnSide, navigationManager.hasRoute {
+                turnSign(side)
+                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -56,6 +66,22 @@ struct SpeedClusterView: View {
             return distance / speed
         }
         return navigationManager.remainingTime
+    }
+
+    private func turnSign(_ side: String) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: side == "right" ? "arrow.turn.up.right" : "arrow.turn.up.left")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(appearance == .night ? Color(red: 0.02, green: 0.06, blue: 0.09) : .white)
+                .frame(width: 56, height: 56)
+                .background(Theme.accent(appearance), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            Text(Formatters.distance(navigationManager.distanceToManeuver, unit: unit))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(colors.primary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(side == "right" ? "Turn right" : "Turn left") in \(Formatters.distance(navigationManager.distanceToManeuver, unit: unit))")
     }
 
     private var speedBadge: some View {
@@ -96,6 +122,93 @@ struct SpeedClusterView: View {
         .accessibilityLabel("Speed camera in \(Int(alert.distance.rounded())) meters")
     }
 
+    /// Current speed in the middle, time gained or lost at 10 / 20 / 30 units either side.
+    private var paceStrip: some View {
+        let current = Int(speedValue.rounded())
+        return HStack(spacing: 4) {
+            ForEach([-30, -20, -10, 0, 10, 20, 30], id: \.self) { offset in
+                paceCell(offset: offset, current: current)
+            }
+        }
+    }
+
+    private var paceNowText: Color {
+        appearance == .day ? .white : Color(red: 0.02, green: 0.06, blue: 0.09)
+    }
+
+    private func paceCell(offset: Int, current: Int) -> some View {
+        let value = min(Int(unit.gaugeMaximum), max(0, current + offset))
+        let isNow = offset == 0
+        let faster = offset > 0
+        return VStack(spacing: 2) {
+            Text(paceDeltaText(at: value, isNow: isNow, current: current))
+                .font(.system(size: isNow ? 16 : 13, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(isNow ? paceNowText : (faster ? Theme.accent(appearance) : colors.secondary))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(isNow ? unit.label : (offset > 0 ? "+\(offset)" : "\(offset)"))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(isNow ? paceNowText.opacity(0.75) : colors.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 7)
+        .background(isNow ? Theme.accent(appearance) : colors.chipTrack, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func paceDeltaText(at value: Int, isNow: Bool, current: Int) -> String {
+        if isNow { return "\(current)" }
+        guard let liveRemainingTime, navigationManager.remainingDistance > 0, speedValue >= 1, value > 0 else {
+            return "—"
+        }
+        let atSpeed = Formatters.timeIfTraveling(
+            kilometersPerHour: kilometersPerHour(forDisplayed: value),
+            remainingMeters: navigationManager.remainingDistance
+        )
+        let text = Formatters.signedMinutes(from: atSpeed - liveRemainingTime)
+        return text == "same" ? "0m" : text
+    }
+
+    private func kilometersPerHour(forDisplayed value: Int) -> Double {
+        switch unit {
+        case .kilometersPerHour: return Double(value)
+        case .milesPerHour: return Double(value) * 1.609344
+        }
+    }
+
+    private var arrivalReadout: some View {
+        VStack(spacing: 2) {
+            Text(etaHeadline)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(liveRemainingTime == nil ? colors.tertiary : Theme.time(appearance))
+                .contentTransition(.numericText())
+            Text(timeCaption)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(colors.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var etaHeadline: String {
+        guard let liveRemainingTime else { return "—" }
+        let time = Formatters.eta(liveRemainingTime)
+        if time.hours > 0 {
+            return "\(time.hours)h \(time.minutesText)m left"
+        }
+        return "\(time.minutes) min left"
+    }
+
+    private var timeCaption: String {
+        guard let liveRemainingTime else { return "Drive to see arrival" }
+        let clock = Formatters.arrivalClock(liveRemainingTime)
+        guard navigationManager.hasRoute else { return "arrive \(clock)" }
+        let distance = Formatters.distance(navigationManager.remainingDistance, unit: unit)
+        return "arrive \(clock)  ·  \(distance)"
+    }
+
     private var accessibilityLabel: String {
         let speed = "\(Formatters.speed(locationManager.speedMetersPerSecond, unit: unit)) \(unit.label)"
         guard let liveRemainingTime else { return speed }
@@ -111,13 +224,13 @@ private struct SpeedometerGauge: View {
     let unit: SpeedUnit
     let remainingTime: TimeInterval?
     let remainingMeters: CLLocationDistance
-    let remainingDistanceText: String?
 
     private var colors: Palette { Theme.palette(appearance) }
     private let startDegrees = 135.0
     private let sweep = 0.75
-    private let outerWidth: CGFloat = 14
-    private let innerWidth: CGFloat = 5
+    private let ringWidth: CGFloat = 8
+    /// Reference gauge size the label sizes were designed for.
+    private let referenceSide: CGFloat = 320
 
     private var speedProgress: Double {
         min(max(speed / max(maxSpeed, 1), 0), 1)
@@ -155,82 +268,68 @@ private struct SpeedometerGauge: View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-            let outerRadius = side / 2 - outerWidth / 2
-            let innerInset = outerWidth + 3 + innerWidth / 2
-            let innerRadius = side / 2 - innerInset
-            let tickOuter = outerRadius - outerWidth / 2 - 1
-            let labelRadius = tickOuter - 14
-            let deltaRadius = labelRadius - 11
+            // Room outside the ring for the time values, which stay on one circle.
+            let margin = 28 * max(side / referenceSide, 1)
+            let ringRadius = side / 2 - margin - ringWidth / 2
+            let tickOuter = ringRadius - ringWidth / 2 - 4
+            let labelRadius = tickOuter - 16
+            let deltaRadius = ringRadius + ringWidth / 2 + 16 * max(side / referenceSide, 1)
+            let fontScale = max(side / referenceSide, 1)
 
             ZStack {
-                gaugeRing(progress: 1, lineWidth: outerWidth, color: colors.chipTrack, inset: outerWidth / 2)
-                gaugeRing(progress: speedProgress, lineWidth: outerWidth, color: Theme.accent(appearance), inset: outerWidth / 2)
-
-                gaugeRing(progress: 1, lineWidth: innerWidth, color: colors.chipTrack, inset: innerInset)
+                gaugeRing(progress: 1, lineWidth: ringWidth, color: colors.chipTrack, radiusInset: side / 2 - ringRadius)
                 if remainingTime != nil {
-                    gaugeRing(progress: speedProgress, lineWidth: innerWidth, color: Theme.time(appearance), inset: innerInset)
+                    gaugeRing(progress: speedProgress, lineWidth: ringWidth, color: Theme.time(appearance), radiusInset: side / 2 - ringRadius)
                 }
 
                 speedTickMarks(center: center, outer: tickOuter)
-                speedTickLabels(center: center, radius: labelRadius)
-                paceDeltaLabels(center: center, radius: deltaRadius)
+                speedTickLabels(center: center, radius: labelRadius, fontScale: fontScale)
+                paceDeltaLabels(center: center, radius: deltaRadius, fontScale: fontScale)
 
-                cap(progress: speedProgress, center: center, radius: outerRadius, color: Theme.accent(appearance), size: 12)
                 if remainingTime != nil {
-                    cap(progress: speedProgress, center: center, radius: innerRadius, color: Theme.time(appearance), size: 7)
+                    cap(progress: speedProgress, center: center, radius: ringRadius, color: Theme.time(appearance), size: 16)
                 }
 
-                needle(center: center, length: innerRadius - 10, progress: speedProgress)
-
-                arrivalReadout
-                    .offset(y: side * 0.34)
+                needle(center: center, length: ringRadius - 18, progress: speedProgress)
             }
         }
     }
 
-    private var arrivalReadout: some View {
-        VStack(spacing: 2) {
-            Text(etaHeadline)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+    private func paceDeltaLabels(center: CGPoint, radius: CGFloat, fontScale: CGFloat) -> some View {
+        let placed = spreadPaceLabels()
+        return ForEach(placed, id: \.value) { item in
+            Text(item.text)
+                .font(.system(size: 11 * fontScale, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(remainingTime == nil ? colors.tertiary : Theme.time(appearance))
-                .contentTransition(.numericText())
-            Text(timeCaption)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(colors.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .foregroundStyle(item.faster ? Theme.accent(appearance) : colors.secondary)
+                .position(polar(center: center, radius: radius, progress: item.progress))
         }
     }
 
-    private var etaHeadline: String {
-        guard let remainingTime else { return "—" }
-        let time = Formatters.eta(remainingTime)
-        if time.hours > 0 {
-            return "\(time.hours)h \(time.minutesText)m left"
+    /// Time labels share one radius. Neighbours that would overlap are walked along the arc.
+    private func spreadPaceLabels() -> [(value: Int, text: String, faster: Bool, progress: Double)] {
+        var items: [(value: Int, text: String, faster: Bool, progress: Double)] = []
+        for value in paceTicks {
+            guard let caption = paceCaption(for: value) else { continue }
+            items.append((value, caption.text, caption.faster, Double(value) / max(maxSpeed, 1)))
         }
-        return "\(time.minutes) min left"
-    }
-
-    private var timeCaption: String {
-        guard let remainingTime else { return "Drive to see arrival" }
-        let clock = Formatters.arrivalClock(remainingTime)
-        if let remainingDistanceText {
-            return "arrive \(clock)  ·  \(remainingDistanceText)"
-        }
-        return "arrive \(clock)"
-    }
-
-    private func paceDeltaLabels(center: CGPoint, radius: CGFloat) -> some View {
-        ForEach(paceTicks, id: \.self) { value in
-            if let caption = paceCaption(for: value) {
-                Text(caption.text)
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(caption.faster ? Theme.accent(appearance) : colors.secondary)
-                    .position(polar(center: center, radius: radius, progress: Double(value) / max(maxSpeed, 1)))
+        items.sort { $0.progress < $1.progress }
+        func width(_ text: String) -> Double { max(30, Double(text.count) * 6.6) }
+        for index in 1..<items.count {
+            let need = (width(items[index - 1].text) + width(items[index].text)) / 2 + 4
+            let gap = 2 * asin(min(0.95, need / (2 * 142))) * 180 / .pi
+            let minProgress = gap / (360 * sweep)
+            if items[index].progress < items[index - 1].progress + minProgress {
+                items[index].progress = items[index - 1].progress + minProgress
             }
         }
+        if let last = items.last, last.progress > 1 {
+            let overflow = last.progress - 1
+            for index in items.indices {
+                items[index].progress = max(0, items[index].progress - overflow)
+            }
+        }
+        return items
     }
 
     private func paceCaption(for tick: Int) -> (text: String, faster: Bool)? {
@@ -248,11 +347,11 @@ private struct SpeedometerGauge: View {
         }
     }
 
-    private func gaugeRing(progress: Double, lineWidth: CGFloat, color: Color, inset: CGFloat) -> some View {
+    private func gaugeRing(progress: Double, lineWidth: CGFloat, color: Color, radiusInset: CGFloat) -> some View {
         Circle()
             .trim(from: 0, to: sweep * min(max(progress, 0), 1))
             .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-            .padding(inset)
+            .padding(radiusInset)
             .rotationEffect(.degrees(startDegrees))
     }
 
@@ -299,12 +398,12 @@ private struct SpeedometerGauge: View {
         .allowsHitTesting(false)
     }
 
-    private func speedTickLabels(center: CGPoint, radius: CGFloat) -> some View {
+    private func speedTickLabels(center: CGPoint, radius: CGFloat, fontScale: CGFloat) -> some View {
         ForEach(speedTicks, id: \.self) { value in
             let progress = Double(value) / maxSpeed
             let major = value % 20 == 0 || value == Int(maxSpeed)
             Text("\(value)")
-                .font(.system(size: major ? 9 : 7, weight: .semibold, design: .rounded))
+                .font(.system(size: (major ? 9 : 7) * fontScale, weight: .semibold, design: .rounded))
                 .foregroundStyle(major ? colors.secondary : colors.tertiary)
                 .position(polar(center: center, radius: radius, progress: progress))
         }

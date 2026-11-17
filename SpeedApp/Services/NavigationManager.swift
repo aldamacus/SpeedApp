@@ -12,6 +12,8 @@ final class NavigationManager: ObservableObject {
     @Published var distanceToManeuver: CLLocationDistance = 0
     @Published var mainRoad: String?
     @Published var nextInstruction: String?
+    /// "left" or "right" when the next maneuver is a turn. Nil while the road stays straight.
+    @Published var nextTurnSide: String?
     @Published var isCalculating = false
     @Published var errorMessage: String?
     @Published var travelMode: TravelMode = .drive
@@ -52,6 +54,7 @@ final class NavigationManager: ObservableObject {
         distanceToManeuver = 0
         mainRoad = nil
         nextInstruction = nil
+        nextTurnSide = nil
         errorMessage = nil
     }
 
@@ -63,6 +66,7 @@ final class NavigationManager: ObservableObject {
             remainingDistance = max(progress.remainingDistance, 0)
             remainingTime = estimatedTime(remaining: remainingDistance, fallback: route.expectedTravelTime)
             nextInstruction = progress.nextInstruction
+            nextTurnSide = progress.turnSide
             distanceToManeuver = progress.distanceToManeuver
         }
 
@@ -119,7 +123,10 @@ final class NavigationManager: ObservableObject {
                     remainingTime = best.expectedTravelTime
                     distanceToManeuver = RouteMath.firstManeuverDistance(from: best)
                     mainRoad = RouteMath.mainRoad(from: best)
-                    nextInstruction = RouteMath.firstInstruction(from: best)
+                    let firstTurn = RouteMath.firstTurn(from: best)
+                    nextInstruction = firstTurn.instruction ?? RouteMath.firstInstruction(from: best)
+                    nextTurnSide = firstTurn.side
+                    distanceToManeuver = firstTurn.distance
                     errorMessage = nil
                 }
             } catch {
@@ -163,23 +170,36 @@ enum RouteMath {
         route.steps.first(where: { $0.distance > 20 })?.distance ?? route.distance
     }
 
-    static func progress(along route: MKRoute, from location: CLLocation) -> (remainingDistance: CLLocationDistance, nextInstruction: String?, distanceToManeuver: CLLocationDistance) {
+    static func progress(along route: MKRoute, from location: CLLocation) -> (remainingDistance: CLLocationDistance, nextInstruction: String?, distanceToManeuver: CLLocationDistance, turnSide: String?) {
         let closest = closestPoint(on: route.polyline, to: location)
         let remaining = remainingDistance(on: route.polyline, fromVertex: closest.vertexIndex, closest: closest.point)
-        let upcoming = upcomingManeuver(in: route, remainingDistance: remaining)
-        return (remaining, upcoming.instruction, upcoming.distance)
+        let upcoming = upcomingTurn(in: route, remainingDistance: remaining)
+        return (remaining, upcoming.instruction, upcoming.distance, upcoming.side)
     }
 
-    private static func upcomingManeuver(in route: MKRoute, remainingDistance: CLLocationDistance) -> (instruction: String?, distance: CLLocationDistance) {
-        var distanceFromEnd = remainingDistance
-        for step in route.steps.reversed() {
-            if distanceFromEnd <= step.distance + 40 {
-                let instruction = step.instructions.isEmpty ? nil : step.instructions
-                return (instruction, max(0, distanceFromEnd))
+    static func firstTurn(from route: MKRoute) -> (instruction: String?, distance: CLLocationDistance, side: String?) {
+        upcomingTurn(in: route, remainingDistance: route.distance)
+    }
+
+    /// The maneuver sits at the start of each step. MapKit only gives the words, so left and right are read from that text.
+    private static func upcomingTurn(in route: MKRoute, remainingDistance: CLLocationDistance) -> (instruction: String?, distance: CLLocationDistance, side: String?) {
+        let traveled = max(0, route.distance - remainingDistance)
+        var along: CLLocationDistance = 0
+        for step in route.steps {
+            if along > traveled + 30, let side = turnSide(from: step.instructions) {
+                return (step.instructions, max(0, along - traveled), side)
             }
-            distanceFromEnd -= step.distance
+            along += step.distance
         }
-        return (firstInstruction(from: route), remainingDistance)
+        return (nil, 0, nil)
+    }
+
+    static func turnSide(from instruction: String) -> String? {
+        let text = instruction.lowercased()
+        if text.hasPrefix("head") { return nil }
+        if text.contains("right") { return "right" }
+        if text.contains("left") { return "left" }
+        return nil
     }
 
     private static func closestPoint(on polyline: MKPolyline, to location: CLLocation) -> (point: MKMapPoint, vertexIndex: Int) {
