@@ -21,6 +21,7 @@ struct SpeedClusterView: View {
                     remainingTime: liveRemainingTime,
                     remainingMeters: navigationManager.hasRoute ? navigationManager.remainingDistance : 0
                 )
+                .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 8)
 
@@ -216,6 +217,14 @@ struct SpeedClusterView: View {
     }
 }
 
+private struct PaceLabel: Identifiable {
+    let value: Int
+    let text: String
+    let faster: Bool
+    var progress: Double
+    var id: Int { value }
+}
+
 private struct SpeedometerGauge: View {
     @Environment(\.appearance) private var appearance
 
@@ -242,7 +251,7 @@ private struct SpeedometerGauge: View {
 
     /// Three slower and three faster marks, about 10–30 units from current speed.
     private var paceTicks: [Int] {
-        guard speed >= 8 else { return [] }
+        guard speed.isFinite, speed >= 8 else { return [] }
         let floor = unit == .kilometersPerHour ? 30 : 20
         var slower: [Int] = []
         var faster: [Int] = []
@@ -266,8 +275,10 @@ private struct SpeedometerGauge: View {
 
     var body: some View {
         GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            let width = geo.size.width.isFinite ? geo.size.width : 0
+            let height = geo.size.height.isFinite ? geo.size.height : 0
+            let side = min(max(width, 0), max(height, 0))
+            let center = CGPoint(x: width / 2, y: height / 2)
             // Room outside the ring for the time values, which stay on one circle.
             let margin = 28 * max(side / referenceSide, 1)
             let ringRadius = side / 2 - margin - ringWidth / 2
@@ -275,8 +286,10 @@ private struct SpeedometerGauge: View {
             let labelRadius = tickOuter - 16
             let deltaRadius = ringRadius + ringWidth / 2 + 16 * max(side / referenceSide, 1)
             let fontScale = max(side / referenceSide, 1)
+            let ringFits = side > 40 && ringRadius > 8 && ringRadius.isFinite && deltaRadius.isFinite
 
             ZStack {
+                if ringFits {
                 gaugeRing(progress: 1, lineWidth: ringWidth, color: colors.chipTrack, radiusInset: side / 2 - ringRadius)
                 if remainingTime != nil {
                     gaugeRing(progress: speedProgress, lineWidth: ringWidth, color: Theme.time(appearance), radiusInset: side / 2 - ringRadius)
@@ -290,14 +303,15 @@ private struct SpeedometerGauge: View {
                     cap(progress: speedProgress, center: center, radius: ringRadius, color: Theme.time(appearance), size: 16)
                 }
 
-                needle(center: center, length: ringRadius - 18, progress: speedProgress)
+                needle(center: center, length: max(ringRadius - 18, 0), progress: speedProgress)
+                }
             }
         }
     }
 
     private func paceDeltaLabels(center: CGPoint, radius: CGFloat, fontScale: CGFloat) -> some View {
         let placed = spreadPaceLabels()
-        return ForEach(placed, id: \.value) { item in
+        return ForEach(placed) { item in
             Text(item.text)
                 .font(.system(size: 11 * fontScale, weight: .bold, design: .rounded))
                 .monospacedDigit()
@@ -307,11 +321,11 @@ private struct SpeedometerGauge: View {
     }
 
     /// Time labels share one radius. Neighbours that would overlap are walked along the arc.
-    private func spreadPaceLabels() -> [(value: Int, text: String, faster: Bool, progress: Double)] {
-        var items: [(value: Int, text: String, faster: Bool, progress: Double)] = []
+    private func spreadPaceLabels() -> [PaceLabel] {
+        var items: [PaceLabel] = []
         for value in paceTicks {
             guard let caption = paceCaption(for: value) else { continue }
-            items.append((value, caption.text, caption.faster, Double(value) / max(maxSpeed, 1)))
+            items.append(PaceLabel(value: value, text: caption.text, faster: caption.faster, progress: Double(value) / max(maxSpeed, 1)))
         }
         items.sort { $0.progress < $1.progress }
         func width(_ text: String) -> Double { max(30, Double(text.count) * 6.6) }

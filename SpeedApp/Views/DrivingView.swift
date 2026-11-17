@@ -18,7 +18,7 @@ struct DrivingView: View {
     @AppStorage("travelMode") private var storedTravelMode: String = TravelMode.drive.rawValue
     @AppStorage("driveCameraDistance") private var driveCameraDistance: Double = 850
     @AppStorage("rideCameraDistance") private var rideCameraDistance: Double = 460
-    @AppStorage("selectedTab") private var selectedTab: Int = AppTab.map.rawValue
+    @State private var selectedTab: Int = AppTab.map.rawValue
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var followUser = true
     @State private var showSearch = false
@@ -65,16 +65,18 @@ struct DrivingView: View {
     private var colors: Palette { Theme.palette(appearance.wrappedValue) }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        ZStack {
             mapTab
-                .tabItem { Label("Map", systemImage: "map.fill") }
-                .tag(AppTab.map.rawValue)
-
-            hudTab
-                .tabItem { Label("HUD", systemImage: "speedometer") }
-                .tag(AppTab.hud.rawValue)
+                .opacity(selectedTab == AppTab.map.rawValue ? 1 : 0)
+                .allowsHitTesting(selectedTab == AppTab.map.rawValue)
+                .accessibilityHidden(selectedTab != AppTab.map.rawValue)
+            if selectedTab == AppTab.hud.rawValue {
+                hudTab
+            }
         }
-        .tint(Theme.accent(appearance.wrappedValue))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            tabBar
+        }
         .overlay {
             if needsPermissionPrompt {
                 permissionOverlay
@@ -183,6 +185,40 @@ struct DrivingView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 8)
         }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(title: "Map", systemName: "map.fill", tab: .map)
+            tabButton(title: "HUD", systemName: "speedometer", tab: .hud)
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(colors.stroke)
+                .frame(height: 1)
+        }
+    }
+
+    private func tabButton(title: String, systemName: String, tab: AppTab) -> some View {
+        let selected = selectedTab == tab.rawValue
+        return Button {
+            selectedTab = tab.rawValue
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: systemName)
+                    .font(.system(size: 20, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+            }
+            .foregroundStyle(selected ? Theme.accent(appearance.wrappedValue) : colors.tertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /// Tab 2: the speedometer HUD on a plain themed background.
