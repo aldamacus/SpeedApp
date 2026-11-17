@@ -328,6 +328,8 @@ private struct SpeedometerGauge: View {
             items.append(PaceLabel(value: value, text: caption.text, faster: caption.faster, progress: Double(value) / max(maxSpeed, 1)))
         }
         items.sort { $0.progress < $1.progress }
+        // Swift traps on 1..<0. Standing still, or with no route, leaves this list empty.
+        guard items.count > 1 else { return items }
         func width(_ text: String) -> Double { max(30, Double(text.count) * 6.6) }
         for index in 1..<items.count {
             let need = (width(items[index - 1].text) + width(items[index].text)) / 2 + 4
